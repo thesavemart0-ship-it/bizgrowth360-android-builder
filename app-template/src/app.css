@@ -1,0 +1,220 @@
+/* App Shell Styles */
+:root {
+  --primary-color: #2563EB;
+  --primary-hover: #1D4ED8;
+  --bg-color: #FFFFFF;
+  --card-bg: #F9FAFB;
+  --text-color: #111827;
+  --text-muted: #6B7280;
+  --error-color: #EF4444;
+  --border-color: #E5E7EB;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #0F172A;
+    --card-bg: #1E293B;
+    --text-color: #F8FAFC;
+    --text-muted: #94A3B8;
+    --border-color: #334155;
+  }
+}
+
+.app-container {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.brand-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.logo-wrapper {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 1.25rem;
+  border-radius: 22px;
+  box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.logo-wrapper:active {
+  transform: scale(0.96);
+}
+
+.app-icon-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.35rem;
+  color: var(--text-color);
+}
+
+.app-subtitle {
+  font-size: 0.925rem;
+  color: var(--text-muted);
+}
+
+.state-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.state-container.hidden {
+  display: none;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.state-container.visible {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Spinner */
+.spinner-wrapper {
+  margin: 1.5rem 0 1rem;
+}
+
+.spinner {
+  width: 42px;
+  height: 42px;
+  border: 3.5px solid rgba(37, 99, 235, 0.15);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.85s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.status-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Error State */
+.error-icon-wrapper {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+
+.error-svg {
+  width: 34px;
+  height: 34px;
+}
+
+.error-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.error-description {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+  max-width: 320px;
+}
+
+.error-meta {
+  width: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.meta-label {
+  font-weight: 600;
+}
+
+/* Retry Button */
+.retry-button {
+  background-color: var(--primary-color);
+  color: #FFFFFF;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 14px 28px;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 180px;
+  transition: all 0.2s ease;
+}
+
+.retry-button:hover {
+  background-color: var(--primary-hover);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.retry-button:active {
+  transform: scale(0.98);
+}
+
+.retry-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.btn-spinner.hidden {
+  display: none;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "bizgrowth360-app-template",
+  "version": "1.0.0",
+  "description": "Capacitor Android Template for Bizgrowth360 App Builder",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('App template build OK')\""
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.6.3"
+  }
+}

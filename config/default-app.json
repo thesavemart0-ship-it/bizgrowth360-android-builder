@@ -1,0 +1,15 @@
+{
+  "app_name": "Demo Website App",
+  "package_id": "in.bizgrowth360.demoapp",
+  "website_url": "https://example.com",
+  "version_name": "1.0.0",
+  "version_code": 1,
+  "app_icon": "public/icon.png",
+  "splash_image": "public/splash.png",
+  "primary_color": "#2563EB",
+  "background_color": "#FFFFFF",
+  "status_bar_color": "#2563EB",
+  "navigation_bar_color": "#FFFFFF",
+  "orientation": "portrait",
+  "allow_external_links": true
+}

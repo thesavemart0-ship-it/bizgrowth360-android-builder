@@ -1,0 +1,19 @@
+{
+  "name": "bizgrowth360-android-builder",
+  "version": "1.0.0",
+  "description": "Automated Android Build Engine using GitHub Actions for Bizgrowth360",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "validate": "node scripts/validate-config.js",
+    "test": "node scripts/validate-config.js --test",
+    "prepare-app": "node scripts/prepare-app.js",
+    "generate-icons": "node scripts/generate-icons.js",
+    "validate-output": "node scripts/validate-output.js",
+    "sync": "cd app-template && npx cap sync android"
+  },
+  "dependencies": {
+    "sharp": "^0.33.5",
+    "yaml": "^2.9.1"
+  }
+}
