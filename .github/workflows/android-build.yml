@@ -267,21 +267,21 @@ jobs:
           eval $CMD
 
       - name: Upload APK Build Artifacts
-        if: always() && (inputs.build_target == 'both' || inputs.build_target == 'apk' || github.event_name == 'push')
+        if: success() && (inputs.build_target == '' || inputs.build_target == 'both' || inputs.build_target == 'apk' || github.event_name == 'push')
         uses: actions/upload-artifact@v4
         with:
           name: Bizgrowth360-${{ env.SAFE_APP_NAME || 'App' }}-${{ env.VERSION_NAME || '1.0.0' }}-APK
           path: dist/apk/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload AAB Build Artifacts
-        if: always() && (inputs.build_target == 'both' || inputs.build_target == 'aab' || github.event_name == 'push')
+        if: success() && (inputs.build_target == '' || inputs.build_target == 'both' || inputs.build_target == 'aab' || github.event_name == 'push')
         uses: actions/upload-artifact@v4
         with:
           name: Bizgrowth360-${{ env.SAFE_APP_NAME || 'App' }}-${{ env.VERSION_NAME || '1.0.0' }}-AAB
           path: dist/aab/*.aab
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Secure Cleanup of Sensitive Keystore Files
