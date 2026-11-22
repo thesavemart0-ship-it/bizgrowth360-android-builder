@@ -293,11 +293,17 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const options = {};
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--config' && args[i + 1]) options.configPath = args[++i];
-    if (args[i] === '--icon' && args[i + 1]) options.iconPath = args[++i];
-    if (args[i] === '--splash' && args[i + 1]) options.splashPath = args[++i];
-    if (args[i] === '--app-name' && args[i + 1]) options.appName = args[++i];
-    if (args[i] === '--primary-color' && args[i + 1]) options.primaryColor = args[++i];
+    const arg = args[i];
+    if (arg.startsWith('--')) {
+      const nextArg = (i + 1 < args.length && !args[i + 1].startsWith('--')) ? args[++i] : null;
+      if (!nextArg || !nextArg.trim()) continue;
+
+      if (arg === '--config') options.configPath = nextArg.trim();
+      else if (arg === '--icon') options.iconPath = nextArg.trim();
+      else if (arg === '--splash') options.splashPath = nextArg.trim();
+      else if (arg === '--app-name') options.appName = nextArg.trim();
+      else if (arg === '--primary-color') options.primaryColor = nextArg.trim();
+    }
   }
   generateIcons(options)
     .then(() => process.exit(0))

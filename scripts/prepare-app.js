@@ -271,40 +271,7 @@ window.APP_CONFIG = {
     // Update versionName
     gradle = gradle.replace(/versionName\s+["'][^"']+["']/, `versionName "${config.version_name}"`);
 
-    // Ensure secure signingConfigs block is present
-    const signingConfigsBlock = `
-    signingConfigs {
-        release {
-            def keystorePath = System.getenv("KEYSTORE_FILE") ?: (project.hasProperty('RELEASE_STORE_FILE') ? project.property('RELEASE_STORE_FILE') : null)
-            if (keystorePath != null && file(keystorePath).exists()) {
-                storeFile file(keystorePath)
-                storePassword System.getenv("KEYSTORE_PASSWORD") ?: (project.hasProperty('RELEASE_STORE_PASSWORD') ? project.property('RELEASE_STORE_PASSWORD') : "")
-                keyAlias System.getenv("KEY_ALIAS") ?: (project.hasProperty('RELEASE_KEY_ALIAS') ? project.property('RELEASE_KEY_ALIAS') : "")
-                keyPassword System.getenv("KEY_PASSWORD") ?: (project.hasProperty('RELEASE_KEY_PASSWORD') ? project.property('RELEASE_KEY_PASSWORD') : "")
-            }
-        }
-    }
-    buildTypes {
-        release {
-            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
-                signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
-            }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-`;
-
-    if (!gradle.includes('signingConfigs {')) {
-      // Replace existing buildTypes block
-      gradle = gradle.replace(/buildTypes\s*\{[\s\S]*?\n\s*\}/, signingConfigsBlock.trim());
-    } else {
-      // Update existing signing block and build types if already present
-      gradle = gradle.replace(/signingConfigs\s*\{[\s\S]*?buildTypes\s*\{[\s\S]*?\n\s*\}/, signingConfigsBlock.trim());
-    }
-
+    // Build.gradle already contains the secure signingConfigs and buildTypes blocks.
     fs.writeFileSync(buildGradlePath, gradle, 'utf8');
     console.log(`[OK] Updated app/build.gradle (ApplicationId: ${config.package_id}, v${config.version_name} build ${config.version_code})`);
   }
@@ -446,18 +413,23 @@ if (require.main === module) {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--config' && args[i + 1]) options.configPath = args[++i];
-    else if (arg === '--app-name' && args[i + 1]) options.appName = args[++i];
-    else if (arg === '--package-id' && args[i + 1]) options.packageId = args[++i];
-    else if (arg === '--website-url' && args[i + 1]) options.websiteUrl = args[++i];
-    else if (arg === '--version-name' && args[i + 1]) options.versionName = args[++i];
-    else if (arg === '--version-code' && args[i + 1]) options.versionCode = parseInt(args[++i], 10);
-    else if (arg === '--primary-color' && args[i + 1]) options.primaryColor = args[++i];
-    else if (arg === '--background-color' && args[i + 1]) options.backgroundColor = args[++i];
-    else if (arg === '--status-bar-color' && args[i + 1]) options.statusBarColor = args[++i];
-    else if (arg === '--navigation-bar-color' && args[i + 1]) options.navigationBarColor = args[++i];
-    else if (arg === '--orientation' && args[i + 1]) options.orientation = args[++i];
-    else if (arg === '--allow-external-links' && args[i + 1]) options.allowExternalLinks = args[++i] === 'true';
+    if (arg.startsWith('--')) {
+      const nextArg = (i + 1 < args.length && !args[i + 1].startsWith('--')) ? args[++i] : null;
+      if (!nextArg || !nextArg.trim()) continue;
+
+      if (arg === '--config') options.configPath = nextArg.trim();
+      else if (arg === '--app-name') options.appName = nextArg.trim();
+      else if (arg === '--package-id') options.packageId = nextArg.trim();
+      else if (arg === '--website-url') options.websiteUrl = nextArg.trim();
+      else if (arg === '--version-name') options.versionName = nextArg.trim();
+      else if (arg === '--version-code') options.versionCode = parseInt(nextArg.trim(), 10);
+      else if (arg === '--primary-color') options.primaryColor = nextArg.trim();
+      else if (arg === '--background-color') options.backgroundColor = nextArg.trim();
+      else if (arg === '--status-bar-color') options.statusBarColor = nextArg.trim();
+      else if (arg === '--navigation-bar-color') options.navigationBarColor = nextArg.trim();
+      else if (arg === '--orientation') options.orientation = nextArg.trim();
+      else if (arg === '--allow-external-links') options.allowExternalLinks = nextArg.trim() === 'true';
+    }
   }
 
   // Also support ENV vars
