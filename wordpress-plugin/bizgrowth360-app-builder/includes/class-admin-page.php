@@ -37,13 +37,31 @@ class AdminPage {
 	 */
 	public function add_menu_page() {
 		add_menu_page(
-			__( 'Bizgrowth360 App Builder', 'bizgrowth360-app-builder' ),
+			__( 'TownConnect App Builder', 'bizgrowth360-app-builder' ),
 			__( 'App Builder', 'bizgrowth360-app-builder' ),
 			'manage_options',
 			'bizgrowth360-app-builder',
 			array( $this, 'render_page' ),
 			'dashicons-smartphone',
 			30
+		);
+
+		add_submenu_page(
+			'bizgrowth360-app-builder',
+			__( 'App Builder', 'bizgrowth360-app-builder' ),
+			__( 'App Builder', 'bizgrowth360-app-builder' ),
+			'manage_options',
+			'bizgrowth360-app-builder',
+			array( $this, 'render_page' )
+		);
+
+		add_submenu_page(
+			'bizgrowth360-app-builder',
+			__( 'Subscription', 'bizgrowth360-app-builder' ),
+			__( 'Subscription', 'bizgrowth360-app-builder' ),
+			'manage_options',
+			'bizgrowth360-app-builder#tab-subscription',
+			array( $this, 'render_page' )
 		);
 	}
 
@@ -410,8 +428,8 @@ class AdminPage {
 				<a href="#tab-monitor" class="nav-tab" data-tab="tab-monitor">
 					<span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Build Center & Downloads', 'bizgrowth360-app-builder' ); ?>
 				</a>
-				<a href="#tab-saas" class="nav-tab" data-tab="tab-saas">
-					<span class="dashicons dashicons-groups"></span> <?php esc_html_e( 'SaaS Multi-Tenant Platform', 'bizgrowth360-app-builder' ); ?>
+				<a href="#tab-subscription" class="nav-tab" data-tab="tab-subscription">
+					<span class="dashicons dashicons-money-alt"></span> <?php esc_html_e( 'Subscription', 'bizgrowth360-app-builder' ); ?>
 				</a>
 			</h2>
 
@@ -866,7 +884,7 @@ class AdminPage {
 				</div>
 			</div>
 
-			<?php $this->render_saas_platform(); ?>
+			<?php $this->render_subscription_section(); ?>
 
 			<!-- MODAL 1: Build Confirmation Summary -->
 			<div id="bg360-confirm-modal" class="bg360-modal-overlay" style="display:none;">
@@ -1514,90 +1532,102 @@ class AdminPage {
 	}
 
 	/**
-	 * Render TAB 5: SaaS Multi-Tenant Platform & Workspaces.
+	 * Render TAB 5: Subscription section.
 	 */
-	public function render_saas_platform() {
+	public function render_subscription_section() {
 		?>
-		<div id="tab-saas" class="bizgrowth360-tab-content">
-			<!-- Platform Metrics Header -->
-			<div class="bg360-metric-grid" id="bg360-saas-metrics-zone" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
-					<span style="font-size:12px; color:#64748B; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Total SaaS Tenants', 'bizgrowth360-app-builder' ); ?></span>
-					<h2 id="saas-total-customers" style="margin:8px 0 0; font-size:26px; color:#0F172A;">-</h2>
-				</div>
-				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
-					<span style="font-size:12px; color:#15803D; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Active Workspaces', 'bizgrowth360-app-builder' ); ?></span>
-					<h2 id="saas-active-customers" style="margin:8px 0 0; font-size:26px; color:#15803D;">-</h2>
-				</div>
-				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
-					<span style="font-size:12px; color:#B91C1C; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Suspended', 'bizgrowth360-app-builder' ); ?></span>
-					<h2 id="saas-suspended-customers" style="margin:8px 0 0; font-size:26px; color:#B91C1C;">-</h2>
-				</div>
-				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
-					<span style="font-size:12px; color:#1D4ED8; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Total Customer Apps', 'bizgrowth360-app-builder' ); ?></span>
-					<h2 id="saas-total-apps" style="margin:8px 0 0; font-size:26px; color:#1D4ED8;">-</h2>
-				</div>
-			</div>
-
-			<!-- SaaS Platform Settings Bar -->
-			<div class="bizgrowth360-card" style="margin-bottom: 24px;">
-				<div class="bizgrowth360-card-header-flex">
-					<div>
-						<h3><span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'Platform Access & Customer Portal Link', 'bizgrowth360-app-builder' ); ?></h3>
-						<p class="description"><?php esc_html_e( 'Control public customer registration and access your white-label customer portal.', 'bizgrowth360-app-builder' ); ?></p>
-					</div>
-					<div>
-						<a href="<?php echo esc_url( home_url( '/app-portal/' ) ); ?>" target="_blank" class="button button-primary">
-							<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'Open Customer Portal', 'bizgrowth360-app-builder' ); ?>
-						</a>
-					</div>
-				</div>
-				<div style="padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--bg360-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-						<input type="checkbox" id="bg360-toggle-registration" value="1" <?php checked( SaasAuth::is_registration_enabled() ); ?> />
-						<strong><?php esc_html_e( 'Allow Public Customer Registration', 'bizgrowth360-app-builder' ); ?></strong>
-					</label>
-					<span class="description"><?php esc_html_e( 'Customer Portal Shortcode:', 'bizgrowth360-app-builder' ); ?> <code>[bizgrowth360_customer_portal]</code></span>
-				</div>
-			</div>
-
-			<!-- Tenant Workspaces Table -->
-			<div class="bizgrowth360-card">
-				<div class="bizgrowth360-card-header-flex">
-					<div>
-						<h3><span class="dashicons dashicons-networking"></span> <?php esc_html_e( 'Tenant Workspaces & Customer Management', 'bizgrowth360-app-builder' ); ?></h3>
-						<p class="description"><?php esc_html_e( 'Review all registered tenants, manage subscription plans, enforce quotas, or suspend/reactivate customer workspaces.', 'bizgrowth360-app-builder' ); ?></p>
-					</div>
-					<div class="bg360-filter-controls">
-						<input type="search" id="bg360-saas-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search workspace or email...', 'bizgrowth360-app-builder' ); ?>" style="max-width:240px;" />
-						<select id="bg360-saas-status-filter">
-							<option value=""><?php esc_html_e( 'All Statuses', 'bizgrowth360-app-builder' ); ?></option>
-							<option value="active"><?php esc_html_e( 'Active', 'bizgrowth360-app-builder' ); ?></option>
-							<option value="suspended"><?php esc_html_e( 'Suspended', 'bizgrowth360-app-builder' ); ?></option>
-						</select>
-					</div>
+		<div id="tab-subscription" class="bizgrowth360-tab-content">
+			<div class="bizgrowth360-subscription-wrap" style="max-width: 900px; margin: 20px auto; padding: 10px;">
+				<!-- Header Intro -->
+				<div style="text-align: center; margin-bottom: 36px;">
+					<span style="display: inline-block; padding: 6px 14px; background: #EEF2FF; color: #4F46E5; font-size: 13px; font-weight: 700; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+						<span class="dashicons dashicons-awards" style="font-size: 16px; width: 16px; height: 16px; vertical-align: text-bottom; margin-right: 4px;"></span>
+						<?php esc_html_e( 'TownConnect Membership', 'bizgrowth360-app-builder' ); ?>
+					</span>
+					<h2 style="font-size: 32px; font-weight: 800; color: #0F172A; margin: 0 0 10px;"><?php esc_html_e( 'Simple, Transparent Pricing', 'bizgrowth360-app-builder' ); ?></h2>
+					<p style="font-size: 16px; color: #64748B; max-width: 580px; margin: 0 auto; line-height: 1.5;">
+						<?php esc_html_e( 'Get complete access to the TownConnect Android & iOS cloud build engine, push notification system, deep links, and lifetime app updates.', 'bizgrowth360-app-builder' ); ?>
+					</p>
 				</div>
 
-				<div class="bg360-table-wrapper" style="margin-top: 16px;">
-					<table class="wp-list-table widefat fixed striped">
-						<thead>
-							<tr>
-								<th style="width: 50px;"><?php esc_html_e( 'ID', 'bizgrowth360-app-builder' ); ?></th>
-								<th><?php esc_html_e( 'Workspace / Business', 'bizgrowth360-app-builder' ); ?></th>
-								<th><?php esc_html_e( 'Customer Email', 'bizgrowth360-app-builder' ); ?></th>
-								<th><?php esc_html_e( 'Current Plan', 'bizgrowth360-app-builder' ); ?></th>
-								<th><?php esc_html_e( 'Status', 'bizgrowth360-app-builder' ); ?></th>
-								<th><?php esc_html_e( 'Registered', 'bizgrowth360-app-builder' ); ?></th>
-								<th style="width: 260px;"><?php esc_html_e( 'Actions', 'bizgrowth360-app-builder' ); ?></th>
-							</tr>
-						</thead>
-						<tbody id="bg360-saas-workspaces-body">
-							<tr><td colspan="7" style="text-align:center; padding: 20px;"><?php esc_html_e( 'Loading tenant workspaces...', 'bizgrowth360-app-builder' ); ?></td></tr>
-						</tbody>
-					</table>
-				</div>
-				<div class="bg360-pagination" id="bg360-saas-pagination" style="display: none; padding: 12px 0;">
-					<span id="bg360-saas-count"></span>
+				<!-- Single Plan Card -->
+				<div class="bizgrowth360-single-plan-card" style="background: #FFFFFF; border: 2px solid #2563EB; border-radius: 20px; padding: 40px 36px; max-width: 480px; margin: 0 auto 30px; box-shadow: 0 20px 30px -10px rgba(37, 99, 235, 0.15); position: relative; text-align: center;">
+					
+					<!-- Popular Badge -->
+					<div style="position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 5px 18px; border-radius: 20px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);">
+						<?php esc_html_e( 'TownConnect Premium', 'bizgrowth360-app-builder' ); ?>
+					</div>
+
+					<!-- Plan Name -->
+					<h3 style="font-size: 24px; font-weight: 800; color: #0F172A; margin: 12px 0 6px;">
+						<?php esc_html_e( 'TownConnect Premium', 'bizgrowth360-app-builder' ); ?>
+					</h3>
+					<p style="font-size: 15px; color: #64748B; margin: 0 0 16px; font-weight: 500;">
+						<?php esc_html_e( 'Full access to TownConnect.', 'bizgrowth360-app-builder' ); ?>
+					</p>
+
+					<!-- Price Display -->
+					<div style="display: flex; align-items: baseline; justify-content: center; gap: 8px; margin: 12px 0 4px;">
+						<span style="font-size: 46px; font-weight: 900; color: #0F172A; line-height: 1;">₹499</span>
+						<span style="font-size: 16px; font-weight: 600; color: #64748B;"><?php esc_html_e( '/ year', 'bizgrowth360-app-builder' ); ?></span>
+					</div>
+					<div style="display: inline-block; background: #ECFDF5; color: #065F46; font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #A7F3D0;">
+						<span class="dashicons dashicons-yes-alt" style="font-size: 14px; width: 14px; height: 14px; vertical-align: text-top; margin-right: 3px;"></span>
+						<?php esc_html_e( '₹499 / app download • Full access included', 'bizgrowth360-app-builder' ); ?>
+					</div>
+
+					<!-- Feature Checklist -->
+					<div style="text-align: left; padding: 20px 0; border-top: 1px solid #F1F5F9; border-bottom: 1px solid #F1F5F9; margin-bottom: 28px;">
+						<ul style="margin: 0; padding: 0; list-style: none;">
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><strong><?php esc_html_e( 'Full access to TownConnect', 'bizgrowth360-app-builder' ); ?></strong></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'Real Android APK & Play Store AAB generation', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'Ready-to-publish iOS IPA compilation', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'Firebase Cloud Messaging (FCM) push notifications', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'Android App Links & Universal deep linking', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'Camera capture & media gallery file uploads', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 12px;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'Offline fallback engine with auto-reconnect', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+							<li style="display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; margin-bottom: 0;">
+								<span class="dashicons dashicons-yes" style="color: #10B981; font-weight: bold;"></span>
+								<span><?php esc_html_e( 'In-app update manager & direct download releases', 'bizgrowth360-app-builder' ); ?></span>
+							</li>
+						</ul>
+					</div>
+
+					<!-- Subscribe Now CTA Button -->
+					<a href="https://www.townconnectai.com" target="_blank" rel="noopener noreferrer" class="button button-primary bg360-btn-subscribe" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 50px; font-size: 16px; font-weight: 700; border-radius: 12px; background: #2563EB; border-color: #1D4ED8; color: #FFFFFF; text-decoration: none; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35); transition: all 0.2s ease;">
+						<span><?php esc_html_e( 'Subscribe Now', 'bizgrowth360-app-builder' ); ?></span>
+						<span class="dashicons dashicons-external" style="font-size: 16px; width: 16px; height: 16px; margin-top: 2px;"></span>
+					</a>
+
+					<!-- Security Notice -->
+					<p style="font-size: 12px; color: #64748B; margin: 16px 0 0; line-height: 1.4; display: flex; align-items: center; justify-content: center; gap: 6px;">
+						<span class="dashicons dashicons-lock" style="font-size: 14px; width: 14px; height: 14px; color: #94A3B8;"></span>
+						<span>
+							<?php esc_html_e( 'Payments, registration, and subscriptions are handled securely on', 'bizgrowth360-app-builder' ); ?>
+							<a href="https://www.townconnectai.com" target="_blank" rel="noopener noreferrer" style="color: #2563EB; font-weight: 600; text-decoration: none;">www.townconnectai.com</a>.
+						</span>
+					</p>
 				</div>
 			</div>
 		</div>
