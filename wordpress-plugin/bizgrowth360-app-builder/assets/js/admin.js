@@ -16,8 +16,6 @@
 		initColorPickers();
 		initLivePreview();
 		initMediaSelectors();
-		initTokenVisibility();
-		initTestConnection();
 		initBuildTrigger();
 		initHistory();
 
@@ -128,18 +126,6 @@
 	}
 
 	/**
-	 * GitHub Token Visibility Toggle
-	 */
-	function initTokenVisibility() {
-		$('#bg360-toggle-token-visibility').on('click', function () {
-			var input = $('#bg360_github_token');
-			var type = input.attr('type') === 'password' ? 'text' : 'password';
-			input.attr('type', type);
-			$(this).find('.dashicons').toggleClass('dashicons-visibility dashicons-hidden');
-		});
-	}
-
-	/**
 	 * Notice Display
 	 */
 	function showNotice(message, type) {
@@ -157,39 +143,17 @@
 	}
 
 	/**
-	 * Test GitHub Connection
-	 */
-	function initTestConnection() {
-		$('#bg360-test-conn-btn').on('click', function () {
-			var btn = $(this);
-			var status = $('#bg360-test-conn-result');
-
-			btn.prop('disabled', true);
-			status.html('<span class="spinner is-active" style="float:none;margin:0 6px 0 0;"></span> ' + bizgrowth360AppBuilder.strings.testing_connection);
-
-			$.post(bizgrowth360AppBuilder.ajax_url, {
-				action: 'bizgrowth360_test_connection',
-				nonce: bizgrowth360AppBuilder.nonce
-			}).done(function (res) {
-				btn.prop('disabled', false);
-				if (res.success) {
-					status.html('<span style="color:#059669;font-weight:600;"><span class="dashicons dashicons-yes"></span> ' + res.data.message + ' (' + res.data.repo_name + ')</span>');
-				} else {
-					status.html('<span style="color:#DC2626;font-weight:600;"><span class="dashicons dashicons-no"></span> ' + (res.data.message || bizgrowth360AppBuilder.strings.connection_failed) + '</span>');
-				}
-			}).fail(function () {
-				btn.prop('disabled', false);
-				status.html('<span style="color:#DC2626;font-weight:600;"><span class="dashicons dashicons-no"></span> Network error testing connection.</span>');
-			});
-		});
-	}
-
-	/**
 	 * Build Trigger & Monitor
 	 */
 	function initBuildTrigger() {
 		$('#bg360-trigger-build-btn, .bg360-trigger-action').on('click', function (e) {
 			e.preventDefault();
+
+			if (!bizgrowth360AppBuilder.has_token) {
+				showNotice(bizgrowth360AppBuilder.strings.service_not_configured, 'warning');
+				switchTab('tab-monitor');
+				return;
+			}
 
 			if (!confirm(bizgrowth360AppBuilder.strings.confirm_build)) {
 				return;
@@ -239,7 +203,7 @@
 		}).fail(function () {
 			stopTimer();
 			updateBuildStatus('failure', 'Network Error');
-			showNotice('Network error dispatching build to GitHub.', 'error');
+			showNotice('Network error dispatching build request.', 'error');
 		});
 	}
 
@@ -305,9 +269,9 @@
 			var run = res.data.run;
 			var artifacts = res.data.artifacts || [];
 
-			$('#bg360-meta-run-id').text('#' + run.run_number + ' (' + run.id + ')');
+			$('#bg360-meta-run-id').text('#' + run.run_number);
 			$('#bg360-meta-event').text(run.event);
-			$('#bg360-meta-github-link').attr('href', run.html_url);
+			$('#bg360-meta-status-text').text(run.status);
 
 			if (run.status === 'queued') {
 				updateBuildStatus('queued', 'Runner Queued');
@@ -349,7 +313,7 @@
 		container.empty();
 
 		if (!artifacts || artifacts.length === 0) {
-			container.html('<p>Artifacts are being indexed by GitHub. Check back in a moment or view run on GitHub.</p>');
+			container.html('<p>Artifacts are being packaged. Check back in a moment or click Refresh History.</p>');
 			$('#bg360-downloads-zone').show();
 			return;
 		}
@@ -374,7 +338,7 @@
 				'    </div>' +
 				'  </div>' +
 				'  <a href="' + downloadLink + '" class="button button-primary bg360-download-btn">' +
-				'    <span class="dashicons dashicons-download"></span> Download' +
+				'    <span class="dashicons dashicons-download"></span> Download ' + typeLabel +
 				'  </a>' +
 				'</div>'
 			);
@@ -395,14 +359,14 @@
 
 	function loadHistory() {
 		var tbody = $('#bg360-history-body');
-		tbody.html('<tr><td colspan="7" class="text-center"><span class="spinner is-active" style="float:none;"></span> Loading history...</td></tr>');
+		tbody.html('<tr><td colspan="6" class="text-center"><span class="spinner is-active" style="float:none;"></span> Loading history...</td></tr>');
 
 		$.post(bizgrowth360AppBuilder.ajax_url, {
 			action: 'bizgrowth360_get_history',
 			nonce: bizgrowth360AppBuilder.nonce
 		}).done(function (res) {
 			if (!res.success || !res.data.runs || res.data.runs.length === 0) {
-				tbody.html('<tr><td colspan="7" class="text-center">No build records found yet.</td></tr>');
+				tbody.html('<tr><td colspan="6" class="text-center">No build records found yet.</td></tr>');
 				return;
 			}
 
@@ -413,25 +377,29 @@
 				else if (run.conclusion === 'failure') statusClass = 'bg360-badge-failure';
 				else if (run.status === 'in_progress') statusClass = 'bg360-badge-progress';
 
+				var actionHtml = '';
+				if (run.conclusion === 'success') {
+					actionHtml = '<span class="bg360-badge bg360-badge-success"><span class="dashicons dashicons-yes"></span> Ready</span>';
+				} else if (run.status === 'in_progress') {
+					actionHtml = '<span class="bg360-badge bg360-badge-progress"><span class="bg360-dot"></span> Compiling...</span>';
+				} else {
+					actionHtml = '<span class="dashicons dashicons-warning" style="color:#EF4444;"></span> Failed';
+				}
+
 				var row = $(
 					'<tr>' +
 					'  <td><strong>#' + run.run_number + '</strong></td>' +
-					'  <td>' + run.name + '</td>' +
 					'  <td><code>' + run.event + '</code></td>' +
 					'  <td>' + run.status + '</td>' +
 					'  <td><span class="bg360-badge ' + statusClass + '">' + (run.conclusion || run.status) + '</span></td>' +
 					'  <td>' + new Date(run.created_at).toLocaleString() + '</td>' +
-					'  <td>' +
-					'    <a href="' + run.html_url + '" target="_blank" rel="noopener noreferrer" class="button button-small">' +
-					'      <span class="dashicons dashicons-external" style="vertical-align:middle;font-size:14px;"></span> Logs' +
-					'    </a>' +
-					'  </td>' +
+					'  <td>' + actionHtml + '</td>' +
 					'</tr>'
 				);
 				tbody.append(row);
 			});
 		}).fail(function () {
-			tbody.html('<tr><td colspan="7" class="text-center text-error">Failed loading build history from GitHub.</td></tr>');
+			tbody.html('<tr><td colspan="6" class="text-center text-error">Failed loading build history records.</td></tr>');
 		});
 	}
 

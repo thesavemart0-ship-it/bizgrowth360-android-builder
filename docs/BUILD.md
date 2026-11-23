@@ -1,89 +1,172 @@
-# Android Build Execution Guide
+# Android Build Execution Guide (Phase 3 — Dynamic Builds)
 
-This document describes how builds are orchestrated in the **Bizgrowth360 Android Build Engine**, the supported build targets, and how to verify and test the resulting packages.
+This document describes how the **Bizgrowth360 Android Dynamic Build Engine** produces independent Android apps from one reusable Capacitor template.
 
----
-
-## 1. Supported Build Types & Targets
-
-The pipeline supports three operational build configurations:
-
-### 1.1 Debug APK (`debug`)
-- **Use Case**: Internal testing, development, and rapid validation.
-- **Output**: `Bizgrowth360-<AppName>-<Version>-debug.apk`
-- **Signing**: Signed with standard Android debug key. Installs on any Android device with *Developer options* and *Install unknown apps* enabled.
-- **Logs**: Contains full web inspector debugging capability (`chrome://inspect`).
-
-### 1.2 Release APK (`release`)
-- **Use Case**: Distribution via direct download, client testing, and enterprise sideloading.
-- **Output**: `Bizgrowth360-<AppName>-<Version>-release.apk`
-- **Signing**: Signed with your production keystore (if secrets configured). Fully optimized.
-
-### 1.3 Play Store Release Bundle (`aab`)
-- **Use Case**: Publishing to the **Google Play Store**.
-- **Output**: `Bizgrowth360-<AppName>-<Version>-release.aab`
-- **Signing**: Signed with your upload key.
-- **Format**: Android App Bundle format (`.aab`) containing optimized split resources for user device architectures. Ready for Google Play Console upload.
+Every build runs in its own temporary workspace. The base `app-template/` is never modified, so concurrent builds cannot leak configuration into each other.
 
 ---
 
-## 2. Triggering a Build via GitHub Actions
+## 1. Build Modes
 
-### Method 1: GitHub Web Interface (`workflow_dispatch`)
-1. Go to the **Actions** tab of your repository.
-2. Select **Bizgrowth360 Android Build Engine**.
+| Setting | Values | Meaning |
+| :--- | :--- | :--- |
+| `build_type` | `apk` | Installable APK only |
+| | `aab` | Google Play App Bundle only |
+| | `both` | APK and AAB in one Gradle invocation |
+| `build_variant` | `release` | Release build (signed with production keystore when configured) |
+| | `debug` | Debug build (debug keystore, WebView inspection enabled) |
+
+Gradle tasks are selected automatically:
+
+- `apk/release` → `assembleRelease`
+- `aab/release` → `bundleRelease`
+- `both/release` → `assembleRelease bundleRelease` (single preparation pass)
+- debug equivalents use `assembleDebug` / `bundleDebug`.
+
+---
+
+## 2. Triggering a Build in GitHub Actions
+
+1. Open **Actions** → **Bizgrowth360 Android Dynamic Build**.
+2. Click **Run workflow** and fill in:
+
+| Input | Example | Notes |
+| :--- | :--- | :--- |
+| App Name | `Mahankali Store` | Escaped safely for Android resources. |
+| Package ID | `in.bizgrowth360.mahankalistore` | Validated; applied to `namespace`, `applicationId`, MainActivity package and Capacitor appId. |
+| Website URL | `https://mahankalistore.example.com` | HTTPS only. Dangerous schemes are rejected. |
+| Version Name | `1.0.0` | Semantic-style validation. |
+| Version Code | `1` | Positive integer, max 2,100,000,000. Never silently reset. |
+| Build Type | `both` | `apk`, `aab`, or `both`. |
+| Build Variant | `release` | `release` or `debug`. |
+| Orientation | `portrait` | `portrait`, `landscape`, `auto`, `sensor`. |
+| Primary Color | `#7C3AED` | Opaque `#RGB` or `#RRGGBB`. |
+| Background Color | `#FFFFFF` | Also used for the native WebView background. |
+| Splash Background Color | `#F5F3FF` | Optional; defaults to background color. |
+| Icon URL | `https://cdn.example.com/icon.png` | Optional HTTPS asset. |
+| Splash URL | `https://cdn.example.com/splash.png` | Optional HTTPS asset. |
+| Allow External Links | `true` | `true` opens other sites in the system browser. `false` blocks them. |
+| Enable Status Bar | `true` | Hides the system status bar when `false`. |
+| Config File | `config/default-app.json` | Optional JSON baseline. Manual inputs override it. |
+
 3. Click **Run workflow**.
-4. Configure the parameters:
-   - `app_name`: Display name on home screen (e.g. `Apex Fitness`)
-   - `package_id`: Android package ID (e.g. `com.apexfitness.app`)
-   - `website_url`: HTTPS website URL (e.g. `https://apexfitness.example.com`)
-   - `version_name`: Semantic version string (e.g. `1.0.0`)
-   - `version_code`: Incremental integer (e.g. `1`)
-   - `build_type`: `both`, `release`, or `debug`
-   - `build_target`: `both`, `apk`, or `aab`
-   - `config_file`: Optional path to custom JSON config (defaults to `config/default-app.json`)
-5. Click **Run workflow**.
 
-### Method 2: Git Push
-Pushing changes to the `main` branch automatically triggers a build using the settings in `config/default-app.json`.
+Pushing to `main` also builds `config/default-app.json` automatically.
 
----
+### Asset uploads
 
-## 3. Downloading Build Artifacts
+GitHub `workflow_dispatch` cannot accept file uploads. Use one of these safe mechanisms:
 
-Once the workflow finishes:
-1. Click on the completed workflow run.
-2. Scroll to the **Artifacts** section at the bottom of the summary page.
-3. You will see individual ZIP downloads:
-   - `Bizgrowth360-<AppName>-<Version>-APK` (contains the APK files)
-   - `Bizgrowth360-<AppName>-<Version>-AAB` (contains the `.aab` bundle)
-4. Unzip the downloaded archive to extract the raw `.apk` or `.aab`.
+1. **HTTPS URL inputs** (`icon_url`, `splash_url`) — the engine downloads with HTTPS enforcement, redirect limits, 30s timeout and a 10 MB cap, then validates and re-encodes the image.
+2. **Committed repository asset** — place the file under `app-template/assets/` (or anywhere inside the template) and set `app_icon` / `splash_image` in a JSON config file.
+3. **Future WordPress payload** — send `icon_url` / `splash_url` in the dispatch JSON.
+
+See [ASSETS.md](ASSETS.md) for accepted formats and dimensions.
 
 ---
 
-## 4. Installing and Testing on a Physical Android Device
+## 3. Downloading Artifacts
 
-### Method A: Direct Transfer / Download
-1. Send the `release.apk` or `debug.apk` to your phone via USB cable, Google Drive, WhatsApp, or email.
-2. On your Android phone, tap the file in your Files / Downloads app.
-3. If prompted, toggle **Allow from this source** to permit installing unknown apps.
-4. Tap **Install**.
-5. Launch the app!
+After the run:
 
-### Method B: Via Android Debug Bridge (ADB)
-Connect your Android phone via USB with USB Debugging enabled:
+1. Open the workflow run.
+2. Scroll to **Artifacts**.
+3. Download the dynamically named ZIPs, for example:
+   - `Mahankali-Store-1.0.0-APK`
+   - `Mahankali-Store-1.0.0-AAB`
+4. Inside each ZIP the file is named `${SafeAppName}-${Version}-${Variant}.apk|aab`.
+
+Names are sanitized: path separators, traversal sequences, control characters and Windows reserved device names are removed.
+
+---
+
+## 4. Installing and Testing
+
+### Direct transfer
+1. Send the APK to an Android device.
+2. Tap the file and allow installation from that source when prompted.
+3. Launch the app; it opens the configured HTTPS website inside the app.
+
+### ADB
 ```bash
-adb install -r dist/apk/Bizgrowth360-Demo_Website_App-1.0.0-debug.apk
+adb install -r "dist/integration-app-a/apk/Mahankali-Store-1.0.0-release.apk"
 ```
 
 ---
 
-## 5. Build Artifact Verification
+## 5. Local Dynamic Build
 
-Before artifacts are published, the pipeline automatically runs `scripts/validate-output.js`:
-- Verifies file existence and non-zero size.
-- Confirms ZIP format validity.
-- For APK: checks for `AndroidManifest.xml`, `classes.dex`, `resources.arsc`.
-- For AAB: checks for `BundleConfig.pb`, `base/manifest/AndroidManifest.xml`, `base/dex/classes.dex`.
-- Validates signing signatures.
-- Computes SHA-256 cryptographic hashes for integrity verification.
+Requirements: Node 22+, JDK 21, Android SDK Platform 35 + Build-Tools, `ANDROID_HOME` set.
+
+```bash
+# From the repository root
+npm ci
+cd app-template && npm ci && cd ..
+
+# Build one app from a JSON configuration
+node scripts/build-app.js --config config/examples/mahankali-store.json
+
+# Override values / run a debug APK
+node scripts/build-app.js \
+  --config config/examples/townconnect.json \
+  --build-type apk \
+  --build-variant debug
+
+# Validate without running Gradle
+node scripts/build-app.js --config config/examples/mahankali-store.json --dry-run
+
+# Keep the temporary workspace for inspection
+node scripts/build-app.js --config config/examples/mahankali-store.json --keep-workspace
+```
+
+Outputs are written to `dist/builds/<build-id>/` (or `--output-dir`):
+
+```text
+dist/builds/<build-id>/
+├── apk/<App>-<Version>-<variant>.apk
+├── aab/<App>-<Version>-<variant>.aab
+├── build-summary.json
+├── build-summary.md
+└── build.log
+```
+
+---
+
+## 6. Automated Verification
+
+Each build performs pre-build and post-build checks:
+
+**Before Gradle**
+- Configuration schema, package ID, URL, version, color, orientation and booleans.
+- Template completeness (20 required files).
+- Isolated workspace creation and node_modules linking.
+- Icon/splash download and validation (format, dimensions, size, still image).
+- Package ID / namespace / version injection into Gradle.
+- App name, URL, orientation resources in `strings.xml`, `app-config.js` and the manifest.
+
+**After Gradle**
+- APK/AAB file exists and is above the minimum size.
+- ZIP structure contains the required Android entries.
+- `aapt2 dump badging` verifies package ID, version name, version code and launcher label.
+- AAB manifest and resource table are decompressed and checked.
+- Bundled `app-config.js` contains the exact app name, package ID and website URL.
+- APK signature presence.
+- `output-metadata.json` matches the requested package/version.
+- SHA-256 hashes are recorded in the summary.
+
+Any failed check fails the build with a meaningful message. Unsigned APKs are rejected in strict mode.
+
+---
+
+## 7. Build Summary
+
+`build-summary.md` is appended to the GitHub Actions summary and contains:
+
+- app name, website, package ID, version name/code, build type/variant, orientation
+- signing status
+- APK/AAB generated status
+- every validation check with PASS/FAIL and detail
+- artifact names, file sizes and SHA-256 hashes
+- configuration source
+
+`build-summary.json` is machine-readable for the future WordPress plugin callback.

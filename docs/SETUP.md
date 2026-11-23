@@ -61,38 +61,46 @@ For detailed instructions on generating a keystore and encoding it to Base64, se
 ## 4. Running Your First Build
 
 1. Go to the **Actions** tab in your GitHub repository.
-2. Under **Workflows** in the left sidebar, click **Bizgrowth360 Android Build Engine**.
+2. Under **Workflows** in the left sidebar, click **Bizgrowth360 Android Dynamic Build**.
 3. Click the **Run workflow** dropdown on the right side.
 4. Fill in or accept the parameters:
-   - **App Display Name**: e.g., `My Business App`
-   - **Android Package ID**: e.g., `com.mycompany.app`
+   - **App Name**: e.g., `My Business App`
+   - **Package ID**: e.g., `com.mycompany.app`
    - **Website URL**: e.g., `https://mybusiness.com`
    - **Version Name**: e.g., `1.0.0`
    - **Version Code**: e.g., `1`
-   - **Build Type**: `both` (builds both Debug and Release)
-   - **Build Target**: `both` (builds both APK and AAB)
+   - **Build Type**: `both` (APK + AAB), `apk`, or `aab`
+   - **Build Variant**: `release` or `debug`
+   - **Orientation**, **Primary Color**, **Background Color**
+   - Optional **Icon URL** / **Splash URL** (HTTPS, see [ASSETS.md](ASSETS.md))
 5. Click the green **Run workflow** button.
-6. Once the build completes (typically 3-5 minutes), download the generated packages from the **Artifacts** section on the workflow run page.
+6. Download the dynamically named artifacts, e.g. `My-Business-App-1.0.0-APK` and `My-Business-App-1.0.0-AAB`.
+
+Every run uses a unique temporary workspace. The base template is never modified, so concurrent builds are isolated.
+
+The previous Phase 2 workflow is preserved as **Bizgrowth360 Legacy Static Build (Regression)** for manual regression checks only.
 
 ---
 
 ## 5. Local Script Execution
 
-You can run the build engine's scripts locally:
-
 ```bash
-# 1. Validate configuration
-npm run validate
+# 1. Validate a configuration file
+node scripts/validate-config.js config/default-app.json
 
-# 2. Run unit tests
-npm test
+# 2. Run the unit + isolation test suite
+node --test tests/unit.test.js
 
-# 3. Apply configuration to app template
-npm run prepare
+# 3. Dry-run preparation (validation, workspace, assets)
+node scripts/build-app.js --config config/examples/mahankali-store.json --dry-run
 
-# 4. Generate app icons and splash screens
-npm run generate-icons
+# 4. Build APK/AAB from an isolated workspace
+node scripts/build-app.js --config config/examples/mahankali-store.json
 
-# 5. Validate generated APK/AAB packages
-npm run validate-output
+# 5. Validate artifacts manually
+node scripts/validate-output.js --strict --config config/examples/mahankali-store.json \
+  --apk dist/builds/<build-id>/apk/<file>.apk \
+  --aab dist/builds/<build-id>/aab/<file>.aab
 ```
+
+Local requirements: `ANDROID_HOME` must point to an Android SDK with Platform 35 and Build-Tools installed. The build script writes the isolated workspace's `local.properties` automatically.

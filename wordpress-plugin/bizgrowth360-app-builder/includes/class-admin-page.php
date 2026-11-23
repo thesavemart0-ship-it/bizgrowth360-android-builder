@@ -78,23 +78,22 @@ class AdminPage {
 			'bizgrowth360-admin-js',
 			'bizgrowth360AppBuilder',
 			array(
-				'ajax_url'            => admin_url( 'admin-ajax.php' ),
-				'nonce'               => wp_create_nonce( 'bizgrowth360_app_builder_nonce' ),
-				'download_base_url'   => admin_url( 'admin-post.php?action=bizgrowth360_download_artifact' ),
-				'download_nonce'      => wp_create_nonce( 'bizgrowth360_download_artifact' ),
-				'strings'             => array(
-					'testing_connection'  => __( 'Testing GitHub Connection...', 'bizgrowth360-app-builder' ),
-					'connection_ok'       => __( 'Connection Verified! Repository is accessible.', 'bizgrowth360-app-builder' ),
-					'connection_failed'   => __( 'Connection Failed. Please check repository settings & token.', 'bizgrowth360-app-builder' ),
-					'triggering_build'    => __( 'Dispatching build request to GitHub Actions...', 'bizgrowth360-app-builder' ),
-					'build_queued'        => __( 'Build dispatched successfully! Monitoring progress...', 'bizgrowth360-app-builder' ),
-					'build_in_progress'   => __( 'Building Android packages in cloud runner...', 'bizgrowth360-app-builder' ),
-					'build_success'       => __( 'Build Succeeded! Android packages are ready for download.', 'bizgrowth360-app-builder' ),
-					'build_failed'        => __( 'Build Failed. Please check GitHub Actions logs.', 'bizgrowth360-app-builder' ),
-					'confirm_build'       => __( 'Are you sure you want to trigger a new Android build on GitHub Actions now?', 'bizgrowth360-app-builder' ),
-					'select_icon'         => __( 'Select App Icon', 'bizgrowth360-app-builder' ),
-					'select_splash'       => __( 'Select Splash Image', 'bizgrowth360-app-builder' ),
-					'use_image'           => __( 'Use This Image', 'bizgrowth360-app-builder' ),
+				'ajax_url'          => admin_url( 'admin-ajax.php' ),
+				'nonce'             => wp_create_nonce( 'bizgrowth360_app_builder_nonce' ),
+				'download_base_url' => admin_url( 'admin-post.php?action=bizgrowth360_download_artifact' ),
+				'download_nonce'    => wp_create_nonce( 'bizgrowth360_download_artifact' ),
+				'has_token'         => Config::has_token(),
+				'strings'           => array(
+					'service_not_configured' => __( 'Build service is not configured. Please define BIZGROWTH360_GITHUB_TOKEN in wp-config.php.', 'bizgrowth360-app-builder' ),
+					'triggering_build'       => __( 'Dispatching build request to the cloud compiler...', 'bizgrowth360-app-builder' ),
+					'build_queued'           => __( 'Build dispatched successfully! Monitoring progress...', 'bizgrowth360-app-builder' ),
+					'build_in_progress'      => __( 'Building Android packages in cloud runner...', 'bizgrowth360-app-builder' ),
+					'build_success'          => __( 'Build Succeeded! Android packages are ready for download.', 'bizgrowth360-app-builder' ),
+					'build_failed'           => __( 'Build Failed. Please verify app configuration and retry.', 'bizgrowth360-app-builder' ),
+					'confirm_build'          => __( 'Are you sure you want to trigger a new Android build now?', 'bizgrowth360-app-builder' ),
+					'select_icon'            => __( 'Select App Icon', 'bizgrowth360-app-builder' ),
+					'select_splash'          => __( 'Select Splash Image', 'bizgrowth360-app-builder' ),
+					'use_image'              => __( 'Use This Image', 'bizgrowth360-app-builder' ),
 				),
 			)
 		);
@@ -122,11 +121,11 @@ class AdminPage {
 			exit;
 		}
 
-		// Fallback redirect to GitHub repository actions page
-		$owner = $this->settings->get( 'github_owner' );
-		$repo  = $this->settings->get( 'github_repo' );
-		wp_redirect( "https://github.com/{$owner}/{$repo}/actions" );
-		exit;
+		wp_die(
+			esc_html__( 'Unable to retrieve artifact download. The file may have expired or is still being generated. Please re-run the build.', 'bizgrowth360-app-builder' ),
+			esc_html__( 'Download Unavailable', 'bizgrowth360-app-builder' ),
+			array( 'back_link' => true )
+		);
 	}
 
 	/**
@@ -144,7 +143,7 @@ class AdminPage {
 					</div>
 					<div>
 						<h1><?php esc_html_e( 'Bizgrowth360 Android App Builder', 'bizgrowth360-app-builder' ); ?></h1>
-						<p class="bizgrowth360-tagline"><?php esc_html_e( 'Convert your WordPress website into a native Android APK & Play Store AAB using GitHub Actions CI/CD.', 'bizgrowth360-app-builder' ); ?></p>
+						<p class="bizgrowth360-tagline"><?php esc_html_e( 'Convert your WordPress website into a native Android APK & Play Store AAB with one click.', 'bizgrowth360-app-builder' ); ?></p>
 					</div>
 				</div>
 				<div class="bizgrowth360-header-actions">
@@ -157,6 +156,16 @@ class AdminPage {
 				</div>
 			</div>
 
+			<!-- System Notice for Unconfigured Token -->
+			<?php if ( ! Config::has_token() ) : ?>
+				<div class="notice notice-warning inline" style="margin: 16px 0; padding: 12px 16px; border-left-color: #F59E0B;">
+					<p style="margin: 0; font-size: 13px;">
+						<strong><?php esc_html_e( 'Build Service Notice:', 'bizgrowth360-app-builder' ); ?></strong>
+						<?php esc_html_e( 'The cloud build engine is not configured yet. To enable builds, please define BIZGROWTH360_GITHUB_TOKEN in your wp-config.php file.', 'bizgrowth360-app-builder' ); ?>
+					</p>
+				</div>
+			<?php endif; ?>
+
 			<!-- Notice Container -->
 			<div id="bg360-notice-container"></div>
 
@@ -165,11 +174,8 @@ class AdminPage {
 				<a href="#tab-builder" class="nav-tab nav-tab-active" data-tab="tab-builder">
 					<span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'App Configuration & Live Preview', 'bizgrowth360-app-builder' ); ?>
 				</a>
-				<a href="#tab-github" class="nav-tab" data-tab="tab-github">
-					<span class="dashicons dashicons-cloud"></span> <?php esc_html_e( 'GitHub CI/CD Engine', 'bizgrowth360-app-builder' ); ?>
-				</a>
 				<a href="#tab-monitor" class="nav-tab" data-tab="tab-monitor">
-					<span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Build Monitor & Downloads', 'bizgrowth360-app-builder' ); ?>
+					<span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Build Center & Downloads', 'bizgrowth360-app-builder' ); ?>
 				</a>
 			</h2>
 
@@ -259,7 +265,7 @@ class AdminPage {
 												<input type="text" id="bg360_app_icon" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[app_icon]" value="<?php echo esc_attr( $options['app_icon'] ); ?>" class="regular-text" />
 												<button type="button" class="button bg360-upload-btn" data-target="#bg360_app_icon"><?php esc_html_e( 'Choose Image', 'bizgrowth360-app-builder' ); ?></button>
 											</div>
-											<p class="description"><?php esc_html_e( 'Recommended: Square PNG 512x512 px. If empty, the default Bizgrowth360 icon will be generated.', 'bizgrowth360-app-builder' ); ?></p>
+											<p class="description"><?php esc_html_e( 'Recommended: Square PNG 512x512 px. If empty, default app icons will be generated.', 'bizgrowth360-app-builder' ); ?></p>
 										</td>
 									</tr>
 									<tr>
@@ -334,7 +340,7 @@ class AdminPage {
 							<div class="bizgrowth360-preview-sticky">
 								<h3><span class="dashicons dashicons-visibility"></span> <?php esc_html_e( 'Live Android Device Preview', 'bizgrowth360-app-builder' ); ?></h3>
 								<div class="bg360-phone-mockup">
-									<!-- Phone Speaker / Camera Notch -->
+									<!-- Phone Notch -->
 									<div class="bg360-phone-notch">
 										<div class="bg360-camera"></div>
 										<div class="bg360-speaker"></div>
@@ -399,66 +405,9 @@ class AdminPage {
 						</div>
 					</div>
 				</div>
-
-				<!-- TAB 2: GitHub CI/CD Engine -->
-				<div id="tab-github" class="bizgrowth360-tab-content">
-					<div class="bizgrowth360-card">
-						<h3><span class="dashicons dashicons-rest-api"></span> <?php esc_html_e( 'GitHub Actions Pipeline Configuration', 'bizgrowth360-app-builder' ); ?></h3>
-						<p><?php esc_html_e( 'Configure the GitHub repository where the automated Android build engine is hosted.', 'bizgrowth360-app-builder' ); ?></p>
-
-						<table class="form-table">
-							<tr>
-								<th scope="row"><label for="bg360_github_owner"><?php esc_html_e( 'Repository Owner / Organization', 'bizgrowth360-app-builder' ); ?></label></th>
-								<td>
-									<input type="text" id="bg360_github_owner" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[github_owner]" value="<?php echo esc_attr( $options['github_owner'] ); ?>" class="regular-text" required />
-								</td>
-							</tr>
-							<tr>
-								<th scope="row"><label for="bg360_github_repo"><?php esc_html_e( 'Repository Name', 'bizgrowth360-app-builder' ); ?></label></th>
-								<td>
-									<input type="text" id="bg360_github_repo" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[github_repo]" value="<?php echo esc_attr( $options['github_repo'] ); ?>" class="regular-text" required />
-								</td>
-							</tr>
-							<tr>
-								<th scope="row"><label for="bg360_github_branch"><?php esc_html_e( 'Git Branch', 'bizgrowth360-app-builder' ); ?></label></th>
-								<td>
-									<input type="text" id="bg360_github_branch" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[github_branch]" value="<?php echo esc_attr( $options['github_branch'] ); ?>" class="regular-text" />
-								</td>
-							</tr>
-							<tr>
-								<th scope="row"><label for="bg360_workflow_file"><?php esc_html_e( 'Workflow YAML File', 'bizgrowth360-app-builder' ); ?></label></th>
-								<td>
-									<input type="text" id="bg360_workflow_file" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[workflow_file]" value="<?php echo esc_attr( $options['workflow_file'] ); ?>" class="regular-text" />
-									<p class="description"><?php esc_html_e( 'The GitHub Actions workflow filename located inside .github/workflows/ (e.g. android-build.yml).', 'bizgrowth360-app-builder' ); ?></p>
-								</td>
-							</tr>
-							<tr>
-								<th scope="row"><label for="bg360_github_token"><?php esc_html_e( 'GitHub Personal Access Token (PAT)', 'bizgrowth360-app-builder' ); ?></label></th>
-								<td>
-									<div class="bg360-token-field">
-										<input type="password" id="bg360_github_token" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[github_token]" value="<?php echo esc_attr( $options['github_token'] ); ?>" class="regular-text" required />
-										<button type="button" class="button" id="bg360-toggle-token-visibility"><span class="dashicons dashicons-visibility"></span></button>
-									</div>
-									<p class="description"><?php esc_html_e( 'Fine-grained or classic token with "repo" and "workflow" permissions to trigger builds and download artifacts.', 'bizgrowth360-app-builder' ); ?></p>
-								</td>
-							</tr>
-						</table>
-
-						<div class="bizgrowth360-test-connection-box">
-							<button type="button" id="bg360-test-conn-btn" class="button button-secondary">
-								<span class="dashicons dashicons-networking"></span> <?php esc_html_e( 'Test GitHub Connection', 'bizgrowth360-app-builder' ); ?>
-							</button>
-							<span id="bg360-test-conn-result" class="bg360-conn-status"></span>
-						</div>
-					</div>
-
-					<div class="bizgrowth360-form-actions">
-						<?php submit_button( __( 'Save GitHub Settings', 'bizgrowth360-app-builder' ), 'primary', 'submit', false ); ?>
-					</div>
-				</div>
 			</form>
 
-			<!-- TAB 3: Build Monitor & Downloads -->
+			<!-- TAB 2: Build Center & Downloads -->
 			<div id="tab-monitor" class="bizgrowth360-tab-content">
 				<!-- Live Build Progress Card -->
 				<div class="bizgrowth360-card bg360-monitor-card" id="bg360-monitor-card">
@@ -491,17 +440,17 @@ class AdminPage {
 						</div>
 						<div class="bg360-stage" id="stage-artifacts">
 							<span class="bg360-stage-dot"></span>
-							<span class="bg360-stage-label"><?php esc_html_e( 'Verification & Artifacts', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-stage-label"><?php esc_html_e( 'Verification & Package Ready', 'bizgrowth360-app-builder' ); ?></span>
 						</div>
 					</div>
 
 					<div class="bg360-run-meta" id="bg360-run-meta" style="display: none;">
 						<div class="bg360-meta-item">
-							<span class="bg360-meta-label"><?php esc_html_e( 'Run ID:', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-meta-label"><?php esc_html_e( 'Build Run:', 'bizgrowth360-app-builder' ); ?></span>
 							<strong id="bg360-meta-run-id">-</strong>
 						</div>
 						<div class="bg360-meta-item">
-							<span class="bg360-meta-label"><?php esc_html_e( 'Event:', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-meta-label"><?php esc_html_e( 'Trigger Type:', 'bizgrowth360-app-builder' ); ?></span>
 							<strong id="bg360-meta-event">-</strong>
 						</div>
 						<div class="bg360-meta-item">
@@ -509,8 +458,8 @@ class AdminPage {
 							<strong id="bg360-meta-time">0s</strong>
 						</div>
 						<div class="bg360-meta-item">
-							<span class="bg360-meta-label"><?php esc_html_e( 'GitHub Console:', 'bizgrowth360-app-builder' ); ?></span>
-							<a href="#" id="bg360-meta-github-link" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'View Logs on GitHub ↗', 'bizgrowth360-app-builder' ); ?></a>
+							<span class="bg360-meta-label"><?php esc_html_e( 'Status:', 'bizgrowth360-app-builder' ); ?></span>
+							<strong id="bg360-meta-status-text">-</strong>
 						</div>
 					</div>
 
@@ -536,18 +485,17 @@ class AdminPage {
 						<table class="wp-list-table widefat fixed striped" id="bg360-history-table">
 							<thead>
 								<tr>
-									<th><?php esc_html_e( 'Run #', 'bizgrowth360-app-builder' ); ?></th>
-									<th><?php esc_html_e( 'Workflow', 'bizgrowth360-app-builder' ); ?></th>
+									<th><?php esc_html_e( 'Build #', 'bizgrowth360-app-builder' ); ?></th>
 									<th><?php esc_html_e( 'Trigger', 'bizgrowth360-app-builder' ); ?></th>
-									<th><?php esc_html_e( 'Status', 'bizgrowth360-app-builder' ); ?></th>
+									<th><?php esc_html_e( 'State', 'bizgrowth360-app-builder' ); ?></th>
 									<th><?php esc_html_e( 'Result', 'bizgrowth360-app-builder' ); ?></th>
-									<th><?php esc_html_e( 'Date / Time', 'bizgrowth360-app-builder' ); ?></th>
-									<th><?php esc_html_e( 'Actions', 'bizgrowth360-app-builder' ); ?></th>
+									<th><?php esc_html_e( 'Date & Time', 'bizgrowth360-app-builder' ); ?></th>
+									<th><?php esc_html_e( 'Action', 'bizgrowth360-app-builder' ); ?></th>
 								</tr>
 							</thead>
 							<tbody id="bg360-history-body">
 								<tr>
-									<td colspan="7" class="text-center"><?php esc_html_e( 'Click "Refresh History" or start a build to load records.', 'bizgrowth360-app-builder' ); ?></td>
+									<td colspan="6" class="text-center"><?php esc_html_e( 'Click "Refresh History" or start a build to load records.', 'bizgrowth360-app-builder' ); ?></td>
 								</tr>
 							</tbody>
 						</table>

@@ -20,6 +20,7 @@ class Settings {
 	 */
 	public function init() {
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_init', array( $this, 'migrate_legacy_options' ) );
 	}
 
 	/**
@@ -31,6 +32,31 @@ class Settings {
 			self::OPTION_KEY,
 			array( $this, 'sanitize_options' )
 		);
+	}
+
+	/**
+	 * Migrate legacy options by removing stored GitHub credentials/repository settings
+	 * while strictly preserving all customer app configurations.
+	 */
+	public function migrate_legacy_options() {
+		$options = get_option( self::OPTION_KEY, null );
+		if ( ! is_array( $options ) ) {
+			return;
+		}
+
+		$legacy_keys = array( 'github_owner', 'github_repo', 'github_branch', 'github_token', 'workflow_file' );
+		$modified    = false;
+
+		foreach ( $legacy_keys as $key ) {
+			if ( array_key_exists( $key, $options ) ) {
+				unset( $options[ $key ] );
+				$modified = true;
+			}
+		}
+
+		if ( $modified ) {
+			update_option( self::OPTION_KEY, $options );
+		}
 	}
 
 	/**
@@ -62,11 +88,13 @@ class Settings {
 	public function set_defaults() {
 		if ( ! get_option( self::OPTION_KEY ) ) {
 			update_option( self::OPTION_KEY, $this->get_defaults() );
+		} else {
+			$this->migrate_legacy_options();
 		}
 	}
 
 	/**
-	 * Return default settings.
+	 * Return default settings (App Configuration only; no GitHub/CI internals).
 	 *
 	 * @return array
 	 */
@@ -99,13 +127,6 @@ class Settings {
 			// Build targets
 			'build_type'           => 'both',
 			'build_target'         => 'both',
-
-			// GitHub CI/CD Pipeline Configuration
-			'github_owner'         => 'thesavemart0-ship-it',
-			'github_repo'          => 'bizgrowth360-android-builder',
-			'github_branch'        => 'main',
-			'github_token'         => defined( 'BIZGROWTH360_GITHUB_TOKEN' ) ? BIZGROWTH360_GITHUB_TOKEN : '',
-			'workflow_file'        => 'android-build.yml',
 		);
 	}
 
@@ -128,19 +149,13 @@ class Settings {
 		$sanitized['background_color']     = ! empty( $input['background_color'] ) ? sanitize_hex_color( $input['background_color'] ) : '#FFFFFF';
 		$sanitized['status_bar_color']     = ! empty( $input['status_bar_color'] ) ? sanitize_hex_color( $input['status_bar_color'] ) : $sanitized['primary_color'];
 		$sanitized['navigation_bar_color'] = ! empty( $input['navigation_bar_color'] ) ? sanitize_hex_color( $input['navigation_bar_color'] ) : '#FFFFFF';
-		$sanitized['orientation']          = in_array( $input['orientation'], array( 'portrait', 'landscape', 'sensor', 'auto' ), true ) ? $input['orientation'] : 'portrait';
+		$sanitized['orientation']          = in_array( $input['orientation'] ?? 'portrait', array( 'portrait', 'landscape', 'sensor', 'auto' ), true ) ? $input['orientation'] : 'portrait';
 		$sanitized['allow_external_links'] = ! empty( $input['allow_external_links'] );
 		$sanitized['app_icon']             = esc_url_raw( $input['app_icon'] ?? '' );
 		$sanitized['splash_image']         = esc_url_raw( $input['splash_image'] ?? '' );
 
-		$sanitized['build_type']           = in_array( $input['build_type'], array( 'both', 'release', 'debug' ), true ) ? $input['build_type'] : 'both';
-		$sanitized['build_target']         = in_array( $input['build_target'], array( 'both', 'apk', 'aab' ), true ) ? $input['build_target'] : 'both';
-
-		$sanitized['github_owner']         = sanitize_text_field( $input['github_owner'] ?? $defaults['github_owner'] );
-		$sanitized['github_repo']          = sanitize_text_field( $input['github_repo'] ?? $defaults['github_repo'] );
-		$sanitized['github_branch']        = sanitize_text_field( $input['github_branch'] ?? $defaults['github_branch'] );
-		$sanitized['github_token']         = sanitize_text_field( $input['github_token'] ?? $defaults['github_token'] );
-		$sanitized['workflow_file']        = sanitize_text_field( $input['workflow_file'] ?? $defaults['workflow_file'] );
+		$sanitized['build_type']           = in_array( $input['build_type'] ?? 'both', array( 'both', 'release', 'debug' ), true ) ? $input['build_type'] : 'both';
+		$sanitized['build_target']         = in_array( $input['build_target'] ?? 'both', array( 'both', 'apk', 'aab' ), true ) ? $input['build_target'] : 'both';
 
 		return $sanitized;
 	}

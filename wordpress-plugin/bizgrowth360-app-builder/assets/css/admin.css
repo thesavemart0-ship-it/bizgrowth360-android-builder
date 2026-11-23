@@ -458,27 +458,6 @@
 	align-items: center;
 }
 
-/* Token field */
-.bg360-token-field {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.bizgrowth360-test-connection-box {
-	margin-top: 16px;
-	padding-top: 16px;
-	border-top: 1px solid #F1F5F9;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.bg360-conn-status {
-	font-size: 13px;
-	font-weight: 500;
-}
-
 /* Build Monitor */
 .bg360-monitor-card {
 	border-left: 4px solid var(--bg360-primary);

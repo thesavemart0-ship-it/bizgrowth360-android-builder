@@ -4,9 +4,14 @@ const config: CapacitorConfig = {
   "appId": "in.bizgrowth360.demoapp",
   "appName": "Demo Website App",
   "webDir": "public",
+  "backgroundColor": "#FFFFFF",
   "server": {
     "androidScheme": "https",
-    "cleartext": false
+    "cleartext": false,
+    "allowNavigation": [
+      "example.com",
+      "*.example.com"
+    ]
   },
   "plugins": {
     "SplashScreen": {
@@ -20,7 +25,7 @@ const config: CapacitorConfig = {
       "splashImmersive": true
     },
     "StatusBar": {
-      "style": "DARK",
+      "style": "LIGHT",
       "backgroundColor": "#2563EB"
     }
   }

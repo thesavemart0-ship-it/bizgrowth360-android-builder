@@ -1,0 +1,19 @@
+{
+  "app_name": "Mahankali's <Store> & Co",
+  "package_id": "in.bizgrowth360.specialchars",
+  "website_url": "https://example.com",
+  "version_name": "1.0.0",
+  "version_code": 3,
+  "app_icon": null,
+  "splash_image": null,
+  "primary_color": "#2563EB",
+  "background_color": "#FFFFFF",
+  "splash_background_color": "#FFFFFF",
+  "status_bar_color": "#2563EB",
+  "navigation_bar_color": "#FFFFFF",
+  "orientation": "portrait",
+  "build_type": "apk",
+  "build_variant": "debug",
+  "allow_external_links": true,
+  "enable_status_bar": true
+}

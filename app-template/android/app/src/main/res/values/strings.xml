@@ -1,7 +1,8 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Demo Website App</string>
-    <string name="title_activity_main">Demo Website App</string>
+    <string name="app_name" formatted="false">Demo Website App</string>
+    <string name="title_activity_main" formatted="false">Demo Website App</string>
     <string name="package_name">in.bizgrowth360.demoapp</string>
-    <string name="custom_url">https://example.com</string>
+    <string name="custom_url" formatted="false">https://example.com</string>
+    <string name="custom_website_host" formatted="false">example.com</string>
 </resources>

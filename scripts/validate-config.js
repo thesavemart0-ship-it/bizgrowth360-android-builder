@@ -34,8 +34,34 @@ const ALLOWED_BUILD_VARIANTS = new Set(['release', 'debug']);
 // branding inconsistencies between Android resources and the web shell.
 const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const SEMVER_OR_VERSION_REGEX = /^[0-9]+(\.[0-9]+)*(-[a-zA-Z0-9.]+)?$/;
-const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const CONTROL_CHARS_REGEX = /[\u0000-\u001F\u007F]/;
 const ASSET_URL_FIELDS = ['icon_url', 'splash_url'];
+
+/**
+ * Returns true for loopback/private/link-local hosts. Asset URLs are fetched by
+ * the build runner, so blocking these avoids SSRF against internal services.
+ */
+function isDisallowedAssetHost(hostname) {
+  if (!hostname) return true;
+  const host = String(hostname).toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '::1' || host === '0:0:0:0:0:0:0:1') return true;
+
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+  }
+
+  if (host.includes(':')) {
+    if (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) return true;
+  }
+  return false;
+}
 
 /**
  * Validates Android Package ID (applicationId)
@@ -183,6 +209,8 @@ function validateAssetUrl(assetUrl, fieldName) {
   }
   if (!parsed.hostname || parsed.hostname.length < 3) {
     errors.push(`${fieldName} has an invalid hostname.`);
+  } else if (isDisallowedAssetHost(parsed.hostname)) {
+    errors.push(`${fieldName} must not target a loopback, private or link-local host.`);
   }
 
   return { valid: errors.length === 0, errors, url: trimmed };
@@ -300,6 +328,17 @@ function findDuplicatePackageIds(configs) {
 }
 
 /**
+ * Returns a normalized hex color or the supplied fallback when invalid.
+ */
+function normalizeColorValue(value, fallback) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return fallback ? String(fallback).toUpperCase() : '';
+  }
+  const result = validateColor(value, 'color');
+  return result.valid ? result.value : (fallback ? String(fallback).toUpperCase() : '');
+}
+
+/**
  * Validates full configuration object.
  *
  * options.allowHttp - allow http website URLs (default false)
@@ -363,6 +402,10 @@ function validateConfig(config, options = {}) {
   // 5. version_code
   if (config.version_code === undefined || config.version_code === null || config.version_code === '') {
     errors.push('version_code is required (positive integer >= 1).');
+  } else if (typeof config.version_code !== 'number' && typeof config.version_code !== 'string') {
+    errors.push(`version_code must be a number, not ${Array.isArray(config.version_code) ? 'an array' : typeof config.version_code}.`);
+  } else if (typeof config.version_code === 'string' && !/^\d+$/.test(config.version_code.trim())) {
+    errors.push(`version_code must contain digits only. Received: "${config.version_code}"`);
   } else {
     const code = Number(config.version_code);
     if (!Number.isInteger(code) || code < 1) {
@@ -454,17 +497,20 @@ function validateConfig(config, options = {}) {
     if (!result.valid) errors.push(...result.errors);
   }
 
-  const primaryColor = typeof config.primary_color === 'string' ? config.primary_color.trim().toUpperCase() : '';
-  const backgroundColor = typeof config.background_color === 'string' ? config.background_color.trim().toUpperCase() : '';
-  const splashBackgroundColor = (
-    typeof config.splash_background_color === 'string' && config.splash_background_color.trim()
-  ) ? config.splash_background_color.trim().toUpperCase() : backgroundColor;
-  const statusBarColor = (
-    typeof config.status_bar_color === 'string' && config.status_bar_color.trim()
-  ) ? config.status_bar_color.trim().toUpperCase() : (primaryColor || '#2563EB');
-  const navigationBarColor = (
-    typeof config.navigation_bar_color === 'string' && config.navigation_bar_color.trim()
-  ) ? config.navigation_bar_color.trim().toUpperCase() : (backgroundColor || '#FFFFFF');
+  const primaryColor = normalizeColorValue(config.primary_color, '#2563EB');
+  const backgroundColor = normalizeColorValue(config.background_color, '#FFFFFF');
+  const splashBackgroundColor = normalizeColorValue(
+    config.splash_background_color || config.background_color,
+    backgroundColor
+  );
+  const statusBarColor = normalizeColorValue(
+    config.status_bar_color || config.primary_color,
+    primaryColor
+  );
+  const navigationBarColor = normalizeColorValue(
+    config.navigation_bar_color || config.background_color,
+    backgroundColor
+  );
 
   return {
     valid: errors.length === 0,
@@ -626,6 +672,7 @@ module.exports = {
   validateWebsiteUrl,
   validateAssetUrl,
   validateColor,
+  isDisallowedAssetHost,
   escapeXml,
   escapeAndroidString,
   escapeHtml,

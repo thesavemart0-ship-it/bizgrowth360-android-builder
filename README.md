@@ -1,166 +1,206 @@
-# Bizgrowth360 Android Automated Build Engine
+# Bizgrowth360 Android Build Engine (Phase 3)
 
-A complete, production-ready Android automated build pipeline using **GitHub Actions**, **Capacitor**, and modern **Android build tools**.
+A configuration-driven Android build engine that turns one reusable **Capacitor + Gradle** template into independent, signed Android applications. It runs locally or in **GitHub Actions** and produces real **APK** and **AAB** packages.
 
-This build engine dynamically generates real, verifiable Android **APK** (Android Package) and **AAB** (Android App Bundle) binaries from web configurations. It is designed as the core compilation engine for the future Bizgrowth360 App Builder WordPress plugin.
-
----
-
-## 🌟 Key Features
-
-- **Real Android Package Compilation**: Builds authentic Android `.apk` and `.aab` packages via Gradle 8.11 and Android SDK Platform 35.
-- **Dynamic App Configuration**: Fully customizable app name, package ID, website URL, version name, version code, colors, orientation, and external link handling.
-- **Automated Branding Engine**: Generates all required Android launcher mipmaps (standard, circular, and Android adaptive icons) and splash screens on-the-fly from high-res SVG vectors or custom images.
-- **Resilient Mobile App Shell**:
-  - Displays instant branded loading spinner upon launch (zero blank screens).
-  - Handles internet disconnects gracefully with a custom offline error screen and one-tap retry button.
-  - Proper Android hardware back button navigation (history navigation inside WebView + double-tap to exit).
-  - Native intent handling for `tel:`, `mailto:`, `sms:`, and `whatsapp:`.
-- **Cryptographic Release Signing**:
-  - Secure in-memory/temporary keystore decoding using GitHub Repository Secrets.
-  - Generates signed Release APKs and Play Store-ready AAB bundles.
-  - Automatic fallback to labelled debug signing if secrets are not configured.
-- **Strict Package Validation**:
-  - Verifies file size, ZIP structure, Dex classes, resources, and package IDs before uploading.
-- **GitHub Actions Step Summary**: Publishes a formatted Markdown summary showing build statuses, metadata, hashes, and download links.
+This phase extends the existing Phase 2 engine. It does **not** rebuild the template, does not touch signing, and does not implement WordPress integration yet.
 
 ---
 
-## 🏗️ Repository Architecture
+## What is dynamic now
 
-```text
-bizgrowth360-android-builder/
-├── .github/
-│   └── workflows/
-│       └── android-build.yml       # Production GitHub Actions workflow
-├── app-template/
-│   ├── package.json                # Capacitor dependencies & CLI
-│   ├── capacitor.config.ts         # TypeScript Capacitor configuration
-│   ├── capacitor.config.json       # JSON Capacitor configuration
-│   ├── src/                        # Web app shell source files
-│   │   ├── index.html              # Shell HTML with loader & offline state
-│   │   ├── app.css                 # Responsive mobile styling
-│   │   ├── app.js                  # Online/offline detection & retry logic
-│   │   └── app-config.js           # Dynamic runtime configuration
-│   ├── public/                     # Static assets bundled into APK
-│   └── android/                    # Complete Android Gradle project
-│       ├── app/                    # Main application module
-│       │   ├── build.gradle        # App Gradle script & signing configs
-│       │   └── src/main/           # AndroidManifest, Java, and resources
-│       ├── build.gradle            # Root Gradle script
-│       └── gradlew, gradlew.bat    # Gradle 8.11.1 wrapper
-├── scripts/
-│   ├── validate-config.js          # Validates config & package ID rules
-│   ├── prepare-app.js              # Injects dynamic config into Android
-│   ├── generate-icons.js           # Generates all mipmaps & splash screens
-│   └── validate-output.js          # Validates APK/AAB structure & signatures
-├── config/
-│   └── default-app.json            # Base app configuration
-├── docs/
-│   ├── SETUP.md                    # Environment and secrets setup
-│   ├── BUILD.md                    # Triggering builds & installing APKs
-│   ├── SIGNING.md                  # Keystore generation & Base64 encoding
-│   └── TROUBLESHOOTING.md          # Common errors and resolutions
-├── README.md
-└── .gitignore
+Each build supplies its own:
+
+- App display name
+- Android package ID (`applicationId` + `namespace` + MainActivity package + Capacitor appId)
+- Website URL (HTTPS only)
+- Version name and version code
+- Primary, background, splash, status-bar and navigation-bar colors
+- Orientation
+- Custom icon and splash image (HTTPS URL or repo-relative path)
+- APK / AAB / both, release or debug
+- External-link policy and status-bar visibility
+
+Every build:
+
+1. Validates the configuration and the template.
+2. Copies the template into a **unique temporary workspace** (the base template is never modified).
+3. Applies branding and native configuration in the workspace.
+4. Downloads/validates optional images and generates all Android densities.
+5. Runs Capacitor sync and Gradle.
+6. Verifies the actual APK/AAB metadata, package ID, version and bundled config.
+7. Writes dynamic artifacts, SHA-256 hashes and a build summary.
+8. Deletes the temporary workspace.
+
+Concurrent builds therefore cannot overwrite each other's files or configuration.
+
+---
+
+## Quick start
+
+### GitHub Actions
+
+**Actions** → **Bizgrowth360 Android Dynamic Build** → **Run workflow**.
+
+Key inputs: `app_name`, `package_id`, `website_url`, `version_name`, `version_code`, `build_type` (`apk|aab|both`), `build_variant` (`release|debug`), `orientation`, colors, and optional `icon_url` / `splash_url`.
+
+Artifacts are named dynamically, for example:
+
+- `Mahankali-Store-1.0.0-APK`
+- `Mahankali-Store-1.0.0-AAB`
+
+See [docs/BUILD.md](docs/BUILD.md) and [docs/ASSETS.md](docs/ASSETS.md).
+
+### Local
+
+```bash
+npm ci
+cd app-template && npm ci && cd ..
+
+export ANDROID_HOME=/path/to/Android/Sdk   # Windows: set ANDROID_HOME
+node scripts/build-app.js --config config/examples/mahankali-store.json
 ```
 
+Requirements: Node 22+, JDK 21, Android SDK Platform 35, Build-Tools, `ANDROID_HOME`.
+
+Inputs can also be supplied through a JSON file, an inline `BUILD_CONFIG_JSON` payload, CLI flags or environment variables. This keeps the engine ready for the future WordPress dispatch API.
+
 ---
 
-## ⚙️ Configuration Schema
+## Configuration schema
 
-The build engine accepts configuration via JSON files or command-line arguments:
+`config/app-config.schema.json` is the machine-readable contract. Example:
 
 ```json
 {
-  "app_name": "Demo Website App",
-  "package_id": "in.bizgrowth360.demoapp",
-  "website_url": "https://example.com",
+  "app_name": "Mahankali Store",
+  "package_id": "in.bizgrowth360.mahankalistore",
+  "website_url": "https://mahankalistore.example.com",
   "version_name": "1.0.0",
   "version_code": 1,
-  "app_icon": "public/icon.png",
-  "splash_image": "public/splash.png",
-  "primary_color": "#2563EB",
+  "app_icon": null,
+  "splash_image": null,
+  "primary_color": "#7C3AED",
   "background_color": "#FFFFFF",
-  "status_bar_color": "#2563EB",
+  "splash_background_color": "#F5F3FF",
+  "status_bar_color": "#7C3AED",
   "navigation_bar_color": "#FFFFFF",
   "orientation": "portrait",
-  "allow_external_links": true
+  "build_type": "both",
+  "build_variant": "release",
+  "allow_external_links": true,
+  "enable_status_bar": true
 }
 ```
 
-### Validation Rules
-- **`package_id`**: Must contain at least two segments (e.g. `com.company.app`). Each segment must start with a letter and contain only alphanumeric characters or underscores. Java reserved keywords (`switch`, `class`, `default`, etc.) are rejected.
-- **`website_url`**: Must be a valid `https://` URL.
-- **`version_code`**: Must be a positive integer `>= 1`.
-- **`colors`**: Must be valid Hex color codes (`#RRGGBB` or `#RGB`).
+### Validation rules
+
+| Field | Rule |
+| :--- | :--- |
+| `app_name` | 1–60 chars, no control characters; XML/AAPT escaped |
+| `package_id` | ≥2 dot segments; each starts with a letter; alphanumeric/underscore; no Java keywords; ≤255 chars |
+| `website_url` | HTTPS only, valid host, no credentials, no dangerous schemes |
+| `version_name` | `1.0.0` / `2.1.4-beta` style, ≤64 chars |
+| `version_code` | integer 1–2,100,000,000 |
+| colors | opaque `#RGB` or `#RRGGBB` |
+| `orientation` | `portrait`, `landscape`, `auto`, `sensor`, `unspecified` |
+| `build_type` | `apk`, `aab`, `both` |
+| `build_variant` | `release`, `debug` |
+| icon / splash | PNG/JPEG/WebP, max 10 MB, single still image |
 
 ---
 
-## 🚀 How to Trigger a Build in GitHub Actions
+## How the app opens the website
 
-1. Navigate to the **Actions** tab in your GitHub repository.
-2. Under **Workflows**, click **Bizgrowth360 Android Build Engine**.
-3. Click the **Run workflow** button on the right.
-4. Fill in or accept the custom inputs:
-   - **App Display Name**: `My Store App`
-   - **Android Package ID**: `com.mystore.android`
-   - **Website URL**: `https://mystore.example.com`
-   - **Version Name**: `1.0.0`
-   - **Version Code**: `1`
-   - **Build Type**: `both` (Debug & Release)
-   - **Build Target**: `both` (APK & AAB)
-5. Click **Run workflow**.
+The bundled Capacitor shell shows a branded loader/offline screen, then navigates to the configured HTTPS URL. The website host is added to Capacitor `server.allowNavigation`, so it stays **inside the app**.
 
-When complete, download your artifacts from the **Artifacts** section at the top of the workflow run:
-- `Bizgrowth360-<AppName>-<Version>-APK`: Installable APK files.
-- `Bizgrowth360-<AppName>-<Version>-AAB`: Google Play upload bundle.
+- Same site and subdomains → loaded in the app WebView.
+- Other HTTP/HTTPS hosts → opened in the system browser when `allow_external_links=true`, blocked when `false`.
+- `tel:`, `mailto:`, `sms:`, `whatsapp:` → handled by native intents.
+- Offline / load failure → bundled branded error page with retry.
+- Hardware back button → WebView history, double-tap to exit.
+- Status bar → colored, light/dark icons chosen automatically, optional hide.
 
 ---
 
-## 🔐 Release Signing Secrets
+## Repository layout
 
-To generate cryptographically signed release builds, configure these 4 repository secrets under **Settings** > **Secrets and variables** > **Actions**:
-
-- `ANDROID_KEYSTORE_BASE64`: Base64 string of your `.jks` file.
-- `ANDROID_KEYSTORE_PASSWORD`: Keystore password.
-- `ANDROID_KEY_ALIAS`: Alias identifier.
-- `ANDROID_KEY_PASSWORD`: Key alias password.
-
-See [docs/SIGNING.md](docs/SIGNING.md) for full instructions on creating and encoding your keystore.
-
----
-
-## 🔌 Future WordPress Integration Architecture
-
-This engine is architected to be driven headlessly by the future Bizgrowth360 App Builder WordPress plugin:
-
-```mermaid
-flowchart LR
-    A["WordPress Plugin<br>(Admin Panel)"] -->|"POST dispatch<br>GitHub API"| B["GitHub Actions Engine<br>(.github/workflows)"]
-    B -->|"Builds & Signs"| C["Artifact Generation<br>(APK & AAB)"]
-    C -->|"Webhook / Status Callback"| A
+```text
+.
+├── .github/workflows/
+│   ├── android-build.yml             # Phase 3 dynamic isolated build
+│   └── android-build-legacy.yml      # Preserved Phase 2 regression workflow
+├── app-template/                     # Reusable Capacitor + Android template
+│   ├── public/                       # App shell (loader, offline, retry)
+│   └── android/                      # Gradle project
+├── config/
+│   ├── default-app.json
+│   ├── app-config.schema.json
+│   └── examples/
+├── scripts/
+│   ├── build-app.js                  # Orchestrator (isolated build)
+│   ├── validate-config.js            # Schema + security validation
+│   ├── prepare-app.js                # Applies config to workspace
+│   ├── generate-icons.js             # Icons, adaptive icons, splash
+│   └── validate-output.js            # APK/AAB + aapt2 verification
+├── tests/
+│   ├── unit.test.js                  # 28 unit/isolation/concurrency tests
+│   └── integration.test.js           # Verifies two real builds
+├── docs/
+└── README.md
 ```
 
-- **Payload Input**: The future WordPress plugin sends the build JSON payload via the GitHub REST API (`POST /repos/{owner}/{repo}/actions/workflows/android-build.yml/dispatches`).
-- **Response**: The plugin polls or receives webhook callbacks with build status, completion timestamps, and direct download URLs.
-
 ---
 
-## 🧪 Local Testing & Verification
+## Tests
 
-Run validation scripts locally:
 ```bash
-# Validate config & test suite
-npm run validate
-npm test
+node --test tests/unit.test.js
 
-# Prepare app template
-npm run prepare-app
-
-# Generate all mipmap icons and splash screens
-npm run generate-icons
-
-# Validate output packages
-npm run validate-output
+# After two real builds:
+BUILD_SUMMARY_A=dist/integration-app-a/build-summary.json \
+BUILD_SUMMARY_B=dist/integration-app-b/build-summary.json \
+node --test tests/integration.test.js
 ```
+
+The integration test opens the actual APK/AAB archives, re-runs strict validation, checks package IDs, labels, versions, URLs, signatures and bundled runtime config, and confirms the two builds are different and their workspaces were cleaned.
+
+---
+
+## Signing
+
+The existing signing mechanism is unchanged. Configure these repository secrets:
+
+| Secret | Purpose |
+| :--- | :--- |
+| `ANDROID_KEYSTORE_BASE64` | Base64 `.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Key alias |
+| `ANDROID_KEY_PASSWORD` | Key password |
+
+If absent, release builds are **debug-signed** and the summary says so. Keystore files are decoded only into `$RUNNER_TEMP`, permission-restricted, masked in logs and deleted in an `always()` step. Secrets are never written to the repository, summaries or artifacts.
+
+See [docs/SIGNING.md](docs/SIGNING.md).
+
+---
+
+## Future WordPress integration (not implemented here)
+
+The engine is ready to receive a dispatch payload from the future WordPress plugin:
+
+- `POST /repos/{owner}/{repo}/actions/workflows/android-build.yml/dispatches`
+- Inputs: app name, URL, package ID, icon/splash URL, colors, version, build type.
+- The same payload can be passed locally as `BUILD_CONFIG_JSON` or `--config-json`.
+- `build-summary.json` provides machine-readable results for polling/callbacks.
+
+No WordPress API is implemented in Phase 3.
+
+---
+
+## More documentation
+
+- [docs/BUILD.md](docs/BUILD.md) — build modes, workflow inputs, artifacts, local builds
+- [docs/ASSETS.md](docs/ASSETS.md) — safe icon/splash input and validation
+- [docs/SETUP.md](docs/SETUP.md) — repository, secrets and local setup
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common errors
+- [docs/SIGNING.md](docs/SIGNING.md) — keystore generation
+- [docs/VERIFICATION.md](docs/VERIFICATION.md) — Phase 3 test results and remaining verification

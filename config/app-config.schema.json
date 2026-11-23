@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bizgrowth360.in/schemas/android-app-config.json",
+  "title": "Bizgrowth360 Android App Build Configuration",
+  "description": "Reusable configuration contract for the dynamic Android build engine. The same payload can be submitted by a future WordPress plugin API.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "app_name",
+    "package_id",
+    "website_url",
+    "version_name",
+    "version_code",
+    "primary_color",
+    "background_color"
+  ],
+  "properties": {
+    "app_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "description": "Android launcher display name. XML/AAPT metacharacters are escaped by the engine."
+    },
+    "package_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$",
+      "description": "Android applicationId and namespace. At least two dot-separated segments."
+    },
+    "website_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 2048,
+      "description": "HTTPS website loaded by the app. Dangerous schemes are rejected."
+    },
+    "version_name": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)*(-[a-zA-Z0-9.]+)?$",
+      "maxLength": 64
+    },
+    "version_code": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2100000000
+    },
+    "app_icon": {
+      "type": ["string", "null"],
+      "description": "Repository/project-relative path to a PNG/JPEG/WebP icon. Omit or null to use the generated default icon."
+    },
+    "splash_image": {
+      "type": ["string", "null"],
+      "description": "Repository/project-relative path to a PNG/JPEG/WebP splash image. Omit or null to use the generated default splash."
+    },
+    "icon_url": {
+      "type": ["string", "null"],
+      "pattern": "^https://",
+      "description": "Optional HTTPS URL for a custom icon. Maximum 10 MB, minimum 192x192."
+    },
+    "splash_url": {
+      "type": ["string", "null"],
+      "pattern": "^https://",
+      "description": "Optional HTTPS URL for a custom splash image. Maximum 10 MB, minimum 320x320."
+    },
+    "primary_color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
+    },
+    "background_color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
+    },
+    "splash_background_color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
+    },
+    "status_bar_color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
+    },
+    "navigation_bar_color": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$"
+    },
+    "orientation": {
+      "type": "string",
+      "enum": ["portrait", "landscape", "auto", "sensor", "unspecified"],
+      "default": "portrait"
+    },
+    "build_type": {
+      "type": "string",
+      "enum": ["apk", "aab", "both"],
+      "default": "both",
+      "description": "Artifact types to produce. Legacy values debug/release are accepted for Phase 2 compatibility."
+    },
+    "build_variant": {
+      "type": "string",
+      "enum": ["release", "debug"],
+      "default": "release"
+    },
+    "allow_external_links": {
+      "type": "boolean",
+      "default": true,
+      "description": "true opens non-site links in the system browser; false blocks them."
+    },
+    "enable_status_bar": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

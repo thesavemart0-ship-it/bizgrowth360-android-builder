@@ -22,7 +22,6 @@ class AjaxHandler {
 	}
 
 	public function init() {
-		add_action( 'wp_ajax_bizgrowth360_test_connection', array( $this, 'ajax_test_connection' ) );
 		add_action( 'wp_ajax_bizgrowth360_trigger_build', array( $this, 'ajax_trigger_build' ) );
 		add_action( 'wp_ajax_bizgrowth360_check_status', array( $this, 'ajax_check_status' ) );
 		add_action( 'wp_ajax_bizgrowth360_get_history', array( $this, 'ajax_get_history' ) );
@@ -35,18 +34,16 @@ class AjaxHandler {
 		check_ajax_referer( 'bizgrowth360_app_builder_nonce', 'nonce' );
 	}
 
-	public function ajax_test_connection() {
-		$this->check_permissions();
-		$result = $this->github_client->test_connection();
-		if ( $result['success'] ) {
-			wp_send_json_success( $result );
-		} else {
-			wp_send_json_error( $result );
-		}
-	}
-
 	public function ajax_trigger_build() {
 		$this->check_permissions();
+
+		if ( ! Config::has_token() ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'The Android build service is currently not configured. Please define BIZGROWTH360_GITHUB_TOKEN in wp-config.php.', 'bizgrowth360-app-builder' ),
+				)
+			);
+		}
 
 		$inputs = array();
 		if ( isset( $_POST['app_name'] ) ) {
@@ -82,12 +79,20 @@ class AjaxHandler {
 	public function ajax_check_status() {
 		$this->check_permissions();
 
+		if ( ! Config::has_token() ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Build service is not configured.', 'bizgrowth360-app-builder' ),
+				)
+			);
+		}
+
 		$runs_data = $this->github_client->get_workflow_runs( 3 );
 		if ( ! $runs_data['success'] || empty( $runs_data['runs'] ) ) {
 			wp_send_json_error( $runs_data );
 		}
 
-		$latest = $runs_data['runs'][0];
+		$latest    = $runs_data['runs'][0];
 		$artifacts = array();
 
 		if ( 'completed' === $latest['status'] && 'success' === $latest['conclusion'] ) {
@@ -107,6 +112,15 @@ class AjaxHandler {
 
 	public function ajax_get_history() {
 		$this->check_permissions();
+
+		if ( ! Config::has_token() ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Build service is not configured.', 'bizgrowth360-app-builder' ),
+				)
+			);
+		}
+
 		$result = $this->github_client->get_workflow_runs( 10 );
 		if ( $result['success'] ) {
 			wp_send_json_success( $result );

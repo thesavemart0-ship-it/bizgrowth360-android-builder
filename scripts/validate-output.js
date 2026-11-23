@@ -120,6 +120,51 @@ function computeSha256(filePath) {
 }
 
 /**
+ * Reads a protobuf string field whose value follows an XmlAttribute name.
+ *
+ * Android App Bundle manifests are protobuf-encoded XmlNode trees. Attributes
+ * are encoded as: field 2 = name, field 3 = value. This helper locates an
+ * attribute by name and decodes its length-delimited value without pulling in a
+ * protobuf dependency.
+ */
+function readProtobufAttribute(buffer, attributeName) {
+  const needle = Buffer.from(attributeName, 'utf8');
+  let index = buffer.indexOf(needle);
+  while (index !== -1) {
+    let pos = index + needle.length;
+    if (buffer[pos] === 0x1a) {
+      pos += 1;
+      const lengthResult = readVarint(buffer, pos);
+      if (lengthResult) {
+        const start = pos + lengthResult.bytes;
+        const end = start + lengthResult.value;
+        if (end <= buffer.length) {
+          return buffer.toString('utf8', start, end);
+        }
+      }
+    }
+    index = buffer.indexOf(needle, index + 1);
+  }
+  return null;
+}
+
+function readVarint(buffer, offset) {
+  let value = 0;
+  let shift = 0;
+  let bytes = 0;
+  while (offset + bytes < buffer.length && bytes < 10) {
+    const byte = buffer[offset + bytes];
+    value |= (byte & 0x7f) << shift;
+    bytes += 1;
+    if ((byte & 0x80) === 0) {
+      return { value, bytes };
+    }
+    shift += 7;
+  }
+  return null;
+}
+
+/**
  * Locates the newest aapt2 available in the Android SDK.
  */
 function findAapt2() {
@@ -182,10 +227,11 @@ function readApkBadging(apkPath) {
     badging.versionCode = packageMatch[2];
     badging.versionName = packageMatch[3];
   }
-  const labelMatch = output.match(/^application-label:'((?:[^'\\]|\\.)*)'/m)
-    || output.match(/^application-label-[\w-]+:'((?:[^'\\]|\\.)*)'/m);
+  const labelMatch = output.match(/^application-label:(.*)$/m);
   if (labelMatch) {
-    badging.applicationLabel = labelMatch[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+    // aapt2 prints the raw label; apostrophes are not escaped, so consume the
+    // whole line and only strip the optional surrounding single quotes.
+    badging.applicationLabel = labelMatch[1].trim().replace(/^'(.*)'$/s, '$1');
   }
   return { available: true, badging, error: null };
 }
@@ -300,27 +346,33 @@ function validateApk(apkPath, expectedConfig = {}, options = {}) {
     const pkgId = expectedConfig.package_id;
     if (badging && badging.packageName) {
       if (badging.packageName !== pkgId) {
-        errors.push(`Package ID mismatch. Expected "${pkgId}", found "${badging.packageName}".`);
+        (strict ? errors : warnings).push(
+          `Package ID mismatch. Expected "${pkgId}", found "${badging.packageName}".`
+        );
       } else {
         console.log(`[PASS] Package ID verified: "${pkgId}"`);
       }
     } else {
       const present = zip.rawBuffer.includes(Buffer.from(pkgId, 'utf8'));
       if (!present) {
-        errors.push(`Expected package ID "${pkgId}" was not found in the APK manifest.`);
+        (strict ? errors : warnings).push(`Expected package ID "${pkgId}" was not found in the APK manifest.`);
       } else {
         console.log(`[PASS] Package ID found in APK string pool: "${pkgId}"`);
       }
     }
 
     if (badging && badging.versionName && String(expectedConfig.version_name) !== badging.versionName) {
-      errors.push(`Version name mismatch. Expected "${expectedConfig.version_name}", found "${badging.versionName}".`);
+      (strict ? errors : warnings).push(
+        `Version name mismatch. Expected "${expectedConfig.version_name}", found "${badging.versionName}".`
+      );
     } else if (badging && badging.versionName) {
       console.log(`[PASS] Version name verified: "${badging.versionName}"`);
     }
 
     if (badging && badging.versionCode && Number(expectedConfig.version_code) !== Number(badging.versionCode)) {
-      errors.push(`Version code mismatch. Expected ${expectedConfig.version_code}, found ${badging.versionCode}.`);
+      (strict ? errors : warnings).push(
+        `Version code mismatch. Expected ${expectedConfig.version_code}, found ${badging.versionCode}.`
+      );
     } else if (badging && badging.versionCode) {
       console.log(`[PASS] Version code verified: ${badging.versionCode}`);
     }
@@ -329,7 +381,7 @@ function validateApk(apkPath, expectedConfig = {}, options = {}) {
   if (expectedConfig.app_name) {
     if (badging && badging.applicationLabel) {
       if (normalizeLabel(badging.applicationLabel) !== normalizeLabel(expectedConfig.app_name)) {
-        errors.push(
+        (strict ? errors : warnings).push(
           `App label mismatch. Expected "${expectedConfig.app_name}", found "${badging.applicationLabel}".`
         );
       } else {
@@ -354,7 +406,7 @@ function validateApk(apkPath, expectedConfig = {}, options = {}) {
     if (appConfig.valid) {
       console.log(`[PASS] Bundled runtime config verified (${appConfig.entryName}).`);
     } else {
-      errors.push(...appConfig.errors);
+      (strict ? errors : warnings).push(...appConfig.errors);
     }
   }
 
@@ -428,30 +480,83 @@ function validateAab(aabPath, expectedConfig = {}, options = {}) {
   const isSigned = signatureFiles.length > 0;
   if (isSigned) {
     console.log(`[PASS] AAB signature present (${signatureFiles.length} file(s)).`);
+  } else if (strict) {
+    errors.push('AAB is unsigned and cannot be uploaded to Google Play.');
   } else {
     warnings.push('AAB has no v1 signature entries. Play Console accepts upload-key signed bundles only.');
   }
 
+  let manifestText = '';
+  let manifestBuffer = null;
+  try {
+    const manifestEntry = readZipEntry(zip, 'base/manifest/AndroidManifest.xml');
+    manifestBuffer = manifestEntry;
+    manifestText = manifestEntry ? manifestEntry.toString('utf8') : '';
+  } catch (err) {
+    warnings.push(`Could not decompress AAB manifest: ${err.message}`);
+  }
+
+  const manifestPackage = manifestBuffer ? readProtobufAttribute(manifestBuffer, 'package') : null;
+  const manifestVersionName = manifestBuffer ? readProtobufAttribute(manifestBuffer, 'versionName') : null;
+  const manifestVersionCode = manifestBuffer ? readProtobufAttribute(manifestBuffer, 'versionCode') : null;
+
   if (expectedConfig.package_id) {
     const pkgId = expectedConfig.package_id;
-    const pkgPresent = zip.rawBuffer.includes(Buffer.from(pkgId, 'utf8'));
+    const pkgPresent = manifestPackage === pkgId
+      || manifestText.includes(pkgId)
+      || zip.rawBuffer.includes(Buffer.from(pkgId, 'utf8'));
     if (!pkgPresent) {
-      errors.push(`Expected package ID "${pkgId}" was not found in the AAB manifest.`);
+      (strict ? errors : warnings).push(`Expected package ID "${pkgId}" was not found in the AAB manifest.`);
     } else {
-      console.log(`[PASS] Package ID found in AAB: "${pkgId}"`);
+      console.log(`[PASS] Package ID found in AAB manifest: "${manifestPackage || pkgId}"`);
     }
   }
 
+  // AAB resource/manifest entries are compressed protobuf, so checks must be
+  // performed against decompressed entries rather than the raw ZIP bytes.
+  let bundleResourcesText = '';
+  try {
+    const resourcesEntry = readZipEntry(zip, 'base/resources.pb');
+    if (resourcesEntry) bundleResourcesText = resourcesEntry.toString('utf8');
+  } catch (err) {
+    warnings.push(`Could not decompress base/resources.pb: ${err.message}`);
+  }
+
   if (expectedConfig.version_name) {
-    if (!zip.rawBuffer.includes(Buffer.from(expectedConfig.version_name, 'utf8'))) {
-      warnings.push(`Version name "${expectedConfig.version_name}" was not found as a direct string.`);
+    if (manifestVersionName !== null && manifestVersionName !== String(expectedConfig.version_name)) {
+      (strict ? errors : warnings).push(
+        `AAB version name mismatch. Expected "${expectedConfig.version_name}", found "${manifestVersionName}".`
+      );
+    } else if (manifestVersionName !== null) {
+      console.log(`[PASS] AAB manifest version name verified: "${manifestVersionName}"`);
     } else {
-      console.log(`[PASS] Version name found in AAB: "${expectedConfig.version_name}"`);
+      const versionPresent = manifestText.includes(expectedConfig.version_name)
+        || bundleResourcesText.includes(expectedConfig.version_name)
+        || zip.rawBuffer.includes(Buffer.from(expectedConfig.version_name, 'utf8'));
+      if (!versionPresent) {
+        warnings.push(`Version name "${expectedConfig.version_name}" was not found as a direct string.`);
+      } else {
+        console.log(`[PASS] Version name found in AAB: "${expectedConfig.version_name}"`);
+      }
+    }
+  }
+
+  if (expectedConfig.version_code !== undefined && expectedConfig.version_code !== null) {
+    if (manifestVersionCode !== null && Number(manifestVersionCode) !== Number(expectedConfig.version_code)) {
+      (strict ? errors : warnings).push(
+        `AAB version code mismatch. Expected ${expectedConfig.version_code}, found ${manifestVersionCode}.`
+      );
+    } else if (manifestVersionCode !== null) {
+      console.log(`[PASS] AAB manifest version code verified: ${manifestVersionCode}`);
+    } else {
+      warnings.push('AAB manifest version code could not be decoded; relying on Gradle output metadata.');
     }
   }
 
   if (expectedConfig.website_url) {
-    if (!zip.rawBuffer.includes(Buffer.from(expectedConfig.website_url, 'utf8'))) {
+    const urlPresent = bundleResourcesText.includes(expectedConfig.website_url)
+      || zip.rawBuffer.includes(Buffer.from(expectedConfig.website_url, 'utf8'));
+    if (!urlPresent) {
       warnings.push(`Website URL "${expectedConfig.website_url}" was not found in the AAB resource table.`);
     } else {
       console.log('[PASS] Website URL found in AAB resources.');
@@ -460,12 +565,14 @@ function validateAab(aabPath, expectedConfig = {}, options = {}) {
     if (appConfig.valid) {
       console.log(`[PASS] Bundled runtime config verified (${appConfig.entryName}).`);
     } else {
-      errors.push(...appConfig.errors);
+      (strict ? errors : warnings).push(...appConfig.errors);
     }
   }
 
   if (expectedConfig.app_name) {
-    if (!zip.rawBuffer.includes(Buffer.from(expectedConfig.app_name, 'utf8'))) {
+    const labelPresent = bundleResourcesText.includes(expectedConfig.app_name)
+      || zip.rawBuffer.includes(Buffer.from(expectedConfig.app_name, 'utf8'));
+    if (!labelPresent) {
       warnings.push(`App name "${expectedConfig.app_name}" was not found as a direct string in the AAB.`);
     } else {
       console.log(`[PASS] App name found in AAB: "${expectedConfig.app_name}"`);
@@ -484,9 +591,9 @@ function validateAab(aabPath, expectedConfig = {}, options = {}) {
       sha256,
       entryCount: zip.totalEntries,
       isSigned,
-      packageName: expectedConfig.package_id || null,
-      versionName: expectedConfig.version_name || null,
-      versionCode: expectedConfig.version_code || null
+      packageName: manifestPackage || expectedConfig.package_id || null,
+      versionName: manifestVersionName || expectedConfig.version_name || null,
+      versionCode: manifestVersionCode || expectedConfig.version_code || null
     }
   };
 }

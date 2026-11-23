@@ -62,4 +62,24 @@ This guide documents common errors encountered during Android automated builds a
 
 ### External links like WhatsApp or Tel do not open
 - **Cause**: URL schemes need intent handling.
-- **Solution**: The included `MainActivity.java` automatically handles `tel:`, `mailto:`, `sms:`, and `whatsapp:` schemes and launches native Android handler apps.
+- **Solution**: The generated `MainActivity.java` handles `tel:`, `mailto:`, `sms:` and `whatsapp:` schemes and launches native handlers. If `allow_external_links` is `false`, all external links (including other websites) are intentionally blocked.
+
+### Custom icon or splash rejected
+- **Cause**: The file is missing, SVG, animated, larger than 10 MB, or below the minimum dimensions (icon 192×192, splash 320×320).
+- **Solution**: Use a PNG/JPEG/WebP still image within the limits. The build intentionally fails instead of silently substituting an image. Omit `app_icon`/`splash_image` (or the URL inputs) to use the generated defaults. See [ASSETS.md](ASSETS.md).
+
+### `APK is unsigned and cannot be installed`
+- **Cause**: The Gradle wrapper did not apply a signing config.
+- **Solution**: The template falls back to the debug key for release builds. Run `validateSigningRelease`/`validateSigningDebug`; ensure the workspace's `local.properties`/`ANDROID_HOME` and JDK are valid. Configure production secrets for signed release artifacts.
+
+### `Package ID mismatch` or `App label mismatch`
+- **Cause**: The APK/AAB was not rebuilt after a configuration change, or an artifact from a previous run was uploaded.
+- **Solution**: Use the build's own `dist/builds/<build-id>/` output. Each run uses a unique build ID; never reuse another run's artifact directory.
+
+### Concurrent builds overwrite each other
+- **Cause**: Running a legacy Phase 2 workflow (which modifies `app-template/`) at the same time as the dynamic workflow.
+- **Solution**: Use **Bizgrowth360 Android Dynamic Build**. It copies the template into `os.tmpdir()/bizgrowth360-builds/<build-id>` and never writes to the base template. The legacy workflow is manual-only for regression testing.
+
+### Build summary is missing
+- **Cause**: The build failed before the orchestrator created its output directory (for example, an invalid inline JSON payload).
+- **Solution**: Check the job log and the automatically uploaded `build-logs-*` artifact. The workflow also writes a fallback summary row.

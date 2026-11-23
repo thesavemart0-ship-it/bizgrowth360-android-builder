@@ -5,8 +5,10 @@ window.APP_CONFIG = {
   websiteUrl: "https://example.com",
   primaryColor: "#2563EB",
   backgroundColor: "#FFFFFF",
+  splashBackgroundColor: "#FFFFFF",
   statusBarColor: "#2563EB",
   navigationBarColor: "#FFFFFF",
   orientation: "portrait",
-  allowExternalLinks: true
+  allowExternalLinks: true,
+  enableStatusBar: true
 };

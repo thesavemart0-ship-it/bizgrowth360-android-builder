@@ -473,13 +473,27 @@ public class MainActivity extends BridgeActivity {
         getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return handleNavigation(view, request.getUrl(), true, request);
+                Uri url = request.getUrl();
+                if (isSpecialScheme(url)) {
+                    return false;
+                }
+                if (shouldStayInApp(url)) {
+                    return false;
+                }
+                return handleExternalNavigation(url);
             }
 
             @SuppressWarnings("deprecation")
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return handleNavigation(view, Uri.parse(url), false, null);
+                Uri uri = Uri.parse(url);
+                if (isSpecialScheme(uri)) {
+                    return false;
+                }
+                if (shouldStayInApp(uri)) {
+                    return false;
+                }
+                return handleExternalNavigation(uri);
             }
         });
 
@@ -491,50 +505,61 @@ public class MainActivity extends BridgeActivity {
                     return;
                 }
                 offlinePageShown = true;
-                view.post(() -> view.loadUrl("file:///android_asset/public/index.html?state=offline"));
+                String appUrl = getBridge().getAppUrl();
+                String errorUrl = (appUrl == null ? "https://localhost" : appUrl)
+                    + "/index.html?state=offline";
+                view.post(() -> view.loadUrl(errorUrl));
             }
         });
     }
 
-    private boolean handleNavigation(WebView view, Uri url, boolean isRequest, WebResourceRequest request) {
-        if (url == null) {
-            return false;
-        }
-
-        String scheme = url.getScheme() == null ? "" : url.getScheme().toLowerCase();
-        String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
-
-        if ("data".equals(scheme) || "blob".equals(scheme) || "about".equals(scheme)) {
-            return false;
-        }
-
-        if ("http".equals(scheme) || "https".equals(scheme)) {
-            if (isAppHost(host)) {
-                offlinePageShown = false;
-                return isRequest
-                    ? super.shouldOverrideUrlLoading(view, request)
-                    : false;
-            }
-            if (allowExternalLinks) {
-                return getBridge().launchIntent(url);
-            }
-            Toast.makeText(this, "External links are disabled in this app", Toast.LENGTH_SHORT).show();
+    private boolean isSpecialScheme(Uri url) {
+        if (url == null || url.getScheme() == null) {
             return true;
         }
+        String scheme = url.getScheme().toLowerCase();
+        return "about".equals(scheme) || "data".equals(scheme) || "blob".equals(scheme);
+    }
+
+    private boolean shouldStayInApp(Uri url) {
+        if (url == null || url.getScheme() == null) {
+            return false;
+        }
+        String scheme = url.getScheme().toLowerCase();
+        if ("http".equals(scheme) || "https".equals(scheme)) {
+            String host = url.getHost() == null ? "" : url.getHost().toLowerCase();
+            if (isAppHost(host)) {
+                offlinePageShown = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean handleExternalNavigation(Uri url) {
+        if (url == null) {
+            return true;
+        }
+        String scheme = url.getScheme() == null ? "" : url.getScheme().toLowerCase();
 
         if ("javascript".equals(scheme) || "file".equals(scheme)) {
             return true;
         }
 
-        // tel:, mailto:, sms:, whatsapp:, market:, upi:, intent:, etc.
-        if (allowExternalLinks) {
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, url));
-            } catch (ActivityNotFoundException ignored) {
-                Toast.makeText(this, "No app can handle this link", Toast.LENGTH_SHORT).show();
-            }
-        } else {
+        if (!allowExternalLinks) {
             Toast.makeText(this, "External links are disabled in this app", Toast.LENGTH_SHORT).show();
+            return true;
+        }
+
+        if ("http".equals(scheme) || "https".equals(scheme)) {
+            return getBridge().launchIntent(url);
+        }
+
+        // tel:, mailto:, sms:, whatsapp:, market:, upi:, intent:, etc.
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, url));
+        } catch (ActivityNotFoundException ignored) {
+            Toast.makeText(this, "No app can handle this link", Toast.LENGTH_SHORT).show();
         }
         return true;
     }

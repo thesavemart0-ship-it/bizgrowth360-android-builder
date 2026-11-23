@@ -25,7 +25,8 @@ const {
   validateConfig,
   buildArtifactBaseName,
   sanitizeFileComponent,
-  escapeAndroidString
+  escapeAndroidString,
+  isDisallowedAssetHost
 } = require('./validate-config');
 const { prepareApp } = require('./prepare-app');
 const { generateIcons, validateImageAsset } = require('./generate-icons');
@@ -165,6 +166,11 @@ function loadConfiguration(options) {
     ? path.resolve(ROOT_DIR, options.configPath)
     : path.join(ROOT_DIR, 'config', 'default-app.json');
 
+  const relativeConfig = path.relative(ROOT_DIR, configPath);
+  if (relativeConfig.startsWith('..') || path.isAbsolute(relativeConfig)) {
+    throw new Error(`Configuration file must stay inside the repository: ${options.configPath}`);
+  }
+
   if (options.configPath || fs.existsSync(configPath)) {
     if (!fs.existsSync(configPath)) {
       throw new Error(`Configuration file not found: ${configPath}`);
@@ -215,11 +221,13 @@ function verifyTemplate() {
 }
 
 function makeBuildId(provided) {
+  const suffix = crypto.randomBytes(3).toString('hex');
   if (provided) {
-    return sanitizeFileComponent(provided, `build-${Date.now()}`, 80);
+    const base = sanitizeFileComponent(provided, `build-${Date.now()}`, 60);
+    return `${base}-${suffix}`;
   }
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  return `${stamp}-${crypto.randomBytes(4).toString('hex')}`;
+  return `${stamp}-${suffix}`;
 }
 
 function copyTemplate(workspaceProjectDir) {
@@ -315,6 +323,9 @@ async function downloadAsset(assetUrl, destinationDir, fieldName) {
     const parsed = new URL(currentUrl);
     if (parsed.protocol !== 'https:') {
       throw new Error(`${fieldName} must use HTTPS. Refusing to download ${currentUrl}`);
+    }
+    if (isDisallowedAssetHost(parsed.hostname)) {
+      throw new Error(`${fieldName} must not target a loopback, private or link-local host.`);
     }
 
     let response;
@@ -450,13 +461,21 @@ function buildTasks(buildType, buildVariant) {
 
 function runGradle(projectDir, tasks, logStream) {
   const androidDir = path.join(projectDir, 'android');
-  const wrapper = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
-  const args = [...tasks, '--stacktrace', '--console=plain'];
-  return runProcess(wrapper, args, {
-    cwd: androidDir,
-    shell: process.platform === 'win32',
-    logStream
-  });
+  const gradleArgs = [...tasks, '--stacktrace', '--console=plain'];
+  if (process.platform === 'win32') {
+    return runProcess(
+      'cmd.exe',
+      ['/d', '/s', '/c', `gradlew.bat ${gradleArgs.join(' ')}`],
+      { cwd: androidDir, logStream }
+    );
+  }
+  // Git may not preserve the executable bit for gradlew (mode 100644).
+  try {
+    fs.chmodSync(path.join(androidDir, 'gradlew'), 0o755);
+  } catch (err) {
+    console.warn(`[WARN] Could not chmod gradlew: ${err.message}`);
+  }
+  return runProcess('./gradlew', gradleArgs, { cwd: androidDir, logStream });
 }
 
 function getSigningStatus(buildVariant) {
@@ -603,6 +622,8 @@ async function buildApp(options = {}) {
 
   let summary = null;
   let exitError = null;
+  let apkDir = null;
+  let aabDir = null;
 
   try {
     console.log('=== Bizgrowth360 Android Dynamic Build ===');
@@ -763,8 +784,8 @@ async function buildApp(options = {}) {
     // 7. Collect artifacts
     // ---------------------------------------------------------------
     const artifactBase = buildArtifactBaseName(config.app_name, config.version_name);
-    const apkDir = path.join(outputDir, 'apk');
-    const aabDir = path.join(outputDir, 'aab');
+    apkDir = path.join(outputDir, 'apk');
+    aabDir = path.join(outputDir, 'aab');
     const wantApk = buildType === 'apk' || buildType === 'both';
     const wantAab = buildType === 'aab' || buildType === 'both';
 
@@ -861,6 +882,7 @@ async function buildApp(options = {}) {
       summary.durationSeconds = Math.round((finished - startedAtDate) / 1000);
       summary.workspaceDir = workspaceDir;
       summary.outputDir = outputDir;
+      summary.workspaceRetained = !!options.keepWorkspace;
 
       try {
         writeSummary(outputDir, summary);

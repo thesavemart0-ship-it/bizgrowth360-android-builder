@@ -4,16 +4,20 @@ const https = require('https');
 const fs = require('fs');
 
 async function triggerBuildFromWordPress() {
+    if (!process.env.FTP_HOST || !process.env.FTP_USER || !process.env.FTP_PASSWORD) {
+        throw new Error('FTP_HOST, FTP_USER and FTP_PASSWORD environment variables are required.');
+    }
     const client = new ftp.Client();
     client.ftp.verbose = false;
 
     console.log('📡 Connecting to FTP...');
     await client.access({
-        host: process.env.FTP_HOST || '217.21.90.172',
-        user: process.env.FTP_USER || 'u686056608.wordpress.townconnectai.com',
-        password: process.env.FTP_PASSWORD || 'Wordpress@2026,',
+        host: process.env.FTP_HOST,
+        user: process.env.FTP_USER,
+        password: process.env.FTP_PASSWORD,
         port: parseInt(process.env.FTP_PORT || '21', 10),
-        secure: false
+        secure: true,
+        secureOptions: { rejectUnauthorized: false }
     });
 
     await client.cd('/public_html');

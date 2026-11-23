@@ -25,6 +25,7 @@ define( 'BIZGROWTH360_APP_BUILDER_URL', plugin_dir_url( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
 
 // Autoload plugin classes
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-config.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-settings.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-github-client.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-ajax-handler.php';
