@@ -509,8 +509,6 @@
 		if (sectionHasItems(type)) {
 			body += '<div class="bg360-subheading"><h4>Items</h4><p>Cards, slides or links for this section.</p></div>' + renderSectionItems(section.items || [], index, type) +
 				'<button type="button" class="button" data-action="add-section-item" data-section="' + index + '">Add item</button>';
-		} else if (type === 'slider') {
-			body += renderSectionItems(section.items || [], index, type);
 		}
 
 		return '<div class="bg360-section-card" draggable="true" data-drag-list="homepage.sections" data-drag-index="' + index + '">' +
@@ -1526,6 +1524,13 @@
 				renderPreview();
 			});
 		}
+		var panelSizeSelect = document.getElementById('bg360-preview-size-panel');
+		if (panelSizeSelect) {
+			panelSizeSelect.addEventListener('change', function () {
+				previewSize = panelSizeSelect.value;
+				renderPreview();
+			});
+		}
 		document.querySelectorAll('[data-preview-mode]').forEach(function (button) {
 			button.addEventListener('click', function () {
 				previewMode = button.getAttribute('data-preview-mode');
@@ -1555,4 +1560,7 @@
 	}
 
 	document.addEventListener('DOMContentLoaded', init);
+	if (document.readyState !== 'loading') {
+		init();
+	}
 })();
