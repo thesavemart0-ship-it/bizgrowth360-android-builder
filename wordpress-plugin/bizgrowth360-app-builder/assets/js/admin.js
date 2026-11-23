@@ -29,12 +29,50 @@
 		initIOSSettings();
 
 		// Activate tab from URL hash if present
-		if (window.location.hash) {
-			var hash = window.location.hash.replace('#', '');
-			if (hash === 'tab-subscription' || hash === 'subscription') {
-				switchTab('tab-subscription');
+		function syncTabFromHash() {
+			if (window.location.hash) {
+				var hash = window.location.hash.replace('#', '');
+				if (hash === 'tab-subscription' || hash === 'subscription') {
+					switchTab('tab-subscription');
+				} else if (hash === 'tab-builder' || hash === 'builder') {
+					switchTab('tab-builder');
+				} else if (hash === 'tab-design' || hash === 'design') {
+					switchTab('tab-design');
+				} else if (hash === 'tab-features' || hash === 'features') {
+					switchTab('tab-features');
+				} else if (hash === 'tab-monitor' || hash === 'monitor') {
+					switchTab('tab-monitor');
+				}
 			}
 		}
+
+		syncTabFromHash();
+		$(window).on('hashchange', syncTabFromHash);
+
+		// Synchronize WordPress Admin Menu items when clicked directly in the sidebar
+		$('#adminmenu a[href*="page=bizgrowth360-subscription"], #adminmenu a[href*="tab-subscription"]').on('click', function (e) {
+			if ($('#tab-subscription').length) {
+				e.preventDefault();
+				switchTab('tab-subscription');
+				$('#adminmenu .toplevel_page_bizgrowth360-app-builder .wp-submenu li').removeClass('current');
+				$(this).closest('li').addClass('current');
+				if (window.history && window.history.pushState) {
+					window.history.pushState(null, '', $(this).attr('href'));
+				}
+			}
+		});
+
+		$('#adminmenu a[href="admin.php?page=bizgrowth360-app-builder"], #adminmenu a[href*="tab-builder"]').on('click', function (e) {
+			if ($('#tab-builder').length && (window.location.search.indexOf('page=bizgrowth360-app-builder') !== -1 || window.location.search.indexOf('page=bizgrowth360-subscription') !== -1)) {
+				e.preventDefault();
+				switchTab('tab-builder');
+				$('#adminmenu .toplevel_page_bizgrowth360-app-builder .wp-submenu li').removeClass('current');
+				$(this).closest('li').addClass('current');
+				if (window.history && window.history.pushState) {
+					window.history.pushState(null, '', $(this).attr('href'));
+				}
+			}
+		});
 
 		// Initial check on load
 		loadActiveBuildOrHistory();
@@ -53,6 +91,15 @@
 
 			$('.bizgrowth360-tab-content').removeClass('active');
 			$('#' + target).addClass('active');
+
+			// Sync WordPress sidebar menu active state
+			if (target === 'tab-subscription') {
+				$('#adminmenu .toplevel_page_bizgrowth360-app-builder .wp-submenu li').removeClass('current');
+				$('#adminmenu a[href*="subscription"]').closest('li').addClass('current');
+			} else {
+				$('#adminmenu .toplevel_page_bizgrowth360-app-builder .wp-submenu li').removeClass('current');
+				$('#adminmenu a[href="admin.php?page=bizgrowth360-app-builder"]').closest('li').addClass('current');
+			}
 
 			if (target === 'tab-monitor') {
 				loadHistory(1);

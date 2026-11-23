@@ -60,9 +60,16 @@ class AdminPage {
 			__( 'Subscription', 'bizgrowth360-app-builder' ),
 			__( 'Subscription', 'bizgrowth360-app-builder' ),
 			'manage_options',
-			'bizgrowth360-app-builder#tab-subscription',
-			array( $this, 'render_page' )
+			'bizgrowth360-subscription',
+			array( $this, 'render_subscription_page' )
 		);
+	}
+
+	/**
+	 * Render the dedicated Subscription subpage.
+	 */
+	public function render_subscription_page() {
+		$this->render_page( 'tab-subscription' );
 	}
 
 	/**
@@ -71,7 +78,12 @@ class AdminPage {
 	 * @param string $hook
 	 */
 	public function enqueue_assets( $hook ) {
-		if ( 'toplevel_page_bizgrowth360-app-builder' !== $hook ) {
+		$valid_hooks = array(
+			'toplevel_page_bizgrowth360-app-builder',
+			'app-builder_page_bizgrowth360-subscription',
+			'admin_page_bizgrowth360-subscription',
+		);
+		if ( ! in_array( $hook, $valid_hooks, true ) && false === strpos( $hook, 'bizgrowth360' ) ) {
 			return;
 		}
 
@@ -364,9 +376,18 @@ class AdminPage {
 
 	/**
 	 * Render the main admin dashboard page.
+	 *
+	 * @param string $default_tab Optional default active tab.
 	 */
-	public function render_page() {
+	public function render_page( $default_tab = 'tab-builder' ) {
 		$options = $this->settings->get_options();
+
+		// Determine active tab from request or default
+		$requested_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : '';
+		if ( empty( $requested_tab ) && isset( $_GET['page'] ) && 'bizgrowth360-subscription' === $_GET['page'] ) {
+			$requested_tab = 'tab-subscription';
+		}
+		$active_tab = ! empty( $requested_tab ) ? $requested_tab : $default_tab;
 		?>
 		<div class="wrap bizgrowth360-admin-wrap">
 			<!-- Header -->
@@ -417,19 +438,19 @@ class AdminPage {
 
 			<!-- Navigation Tabs -->
 			<h2 class="nav-tab-wrapper bizgrowth360-nav-tabs">
-				<a href="#tab-builder" class="nav-tab nav-tab-active" data-tab="tab-builder">
+				<a href="#tab-builder" class="nav-tab <?php echo 'tab-builder' === $active_tab ? 'nav-tab-active' : ''; ?>" data-tab="tab-builder">
 					<span class="dashicons dashicons-admin-generic"></span> <?php esc_html_e( 'App Configuration & Live Preview', 'bizgrowth360-app-builder' ); ?>
 				</a>
-				<a href="#tab-design" class="nav-tab" data-tab="tab-design">
+				<a href="#tab-design" class="nav-tab <?php echo 'tab-design' === $active_tab ? 'nav-tab-active' : ''; ?>" data-tab="tab-design">
 					<span class="dashicons dashicons-art"></span> <?php esc_html_e( 'App Design Studio', 'bizgrowth360-app-builder' ); ?>
 				</a>
-				<a href="#tab-features" class="nav-tab" data-tab="tab-features">
+				<a href="#tab-features" class="nav-tab <?php echo 'tab-features' === $active_tab ? 'nav-tab-active' : ''; ?>" data-tab="tab-features">
 					<span class="dashicons dashicons-admin-plugins"></span> <?php esc_html_e( 'Native Features', 'bizgrowth360-app-builder' ); ?>
 				</a>
-				<a href="#tab-monitor" class="nav-tab" data-tab="tab-monitor">
+				<a href="#tab-monitor" class="nav-tab <?php echo 'tab-monitor' === $active_tab ? 'nav-tab-active' : ''; ?>" data-tab="tab-monitor">
 					<span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Build Center & Downloads', 'bizgrowth360-app-builder' ); ?>
 				</a>
-				<a href="#tab-subscription" class="nav-tab" data-tab="tab-subscription">
+				<a href="#tab-subscription" class="nav-tab <?php echo 'tab-subscription' === $active_tab ? 'nav-tab-active' : ''; ?>" data-tab="tab-subscription">
 					<span class="dashicons dashicons-money-alt"></span> <?php esc_html_e( 'Subscription', 'bizgrowth360-app-builder' ); ?>
 				</a>
 			</h2>
@@ -438,7 +459,7 @@ class AdminPage {
 				<?php settings_fields( 'bizgrowth360_app_builder_group' ); ?>
 
 				<!-- TAB 1: App Builder & Live Preview -->
-				<div id="tab-builder" class="bizgrowth360-tab-content active">
+				<div id="tab-builder" class="bizgrowth360-tab-content <?php echo 'tab-builder' === $active_tab ? 'active' : ''; ?>">
 					<div class="bizgrowth360-split-layout">
 						<!-- Left: Configuration Form -->
 						<div class="bizgrowth360-config-pane">
@@ -738,11 +759,11 @@ class AdminPage {
 				</div>
 			</form>
 
-			<?php $this->render_design_studio(); ?>
-			<?php $this->render_native_features(); ?>
+			<?php $this->render_design_studio( 'tab-design' === $active_tab ); ?>
+			<?php $this->render_native_features( 'tab-features' === $active_tab ); ?>
 
 			<!-- TAB 2: Build Center & Downloads -->
-			<div id="tab-monitor" class="bizgrowth360-tab-content">
+			<div id="tab-monitor" class="bizgrowth360-tab-content <?php echo 'tab-monitor' === $active_tab ? 'active' : ''; ?>">
 				<!-- Live Build Progress Card -->
 				<div class="bizgrowth360-card bg360-monitor-card" id="bg360-monitor-card">
 					<div class="bg360-monitor-header">
@@ -885,7 +906,7 @@ class AdminPage {
 				</div>
 			</div>
 
-			<?php $this->render_subscription_section(); ?>
+			<?php $this->render_subscription_section( 'tab-subscription' === $active_tab ); ?>
 
 			<!-- MODAL 1: Build Confirmation Summary -->
 			<div id="bg360-confirm-modal" class="bg360-modal-overlay" style="display:none;">
@@ -1019,7 +1040,7 @@ class AdminPage {
 	 * phone preview are rendered by assets/js/design-studio.js from the saved,
 	 * server-sanitized design configuration.
 	 */
-	public function render_design_studio() {
+	public function render_design_studio( $is_active = false ) {
 		$sections = array(
 			'theme'      => array( 'dashicons-admin-appearance', __( 'App Theme', 'bizgrowth360-app-builder' ) ),
 			'header'     => array( 'dashicons-align-center', __( 'App Header', 'bizgrowth360-app-builder' ) ),
@@ -1033,7 +1054,7 @@ class AdminPage {
 			'reset'      => array( 'dashicons-image-rotate', __( 'Reset & Save', 'bizgrowth360-app-builder' ) ),
 		);
 		?>
-		<div id="tab-design" class="bizgrowth360-tab-content">
+		<div id="tab-design" class="bizgrowth360-tab-content <?php echo ! empty( $is_active ) ? 'active' : ''; ?>">
 			<div id="bg360-design-studio" class="bg360-studio" data-schema-version="<?php echo esc_attr( DesignConfig::SCHEMA_VERSION ); ?>">
 				<div class="bg360-studio-topbar">
 					<div class="bg360-studio-topbar-title">
@@ -1121,13 +1142,13 @@ class AdminPage {
 	/**
 	 * Render Native Features tab panel and controls.
 	 */
-	public function render_native_features() {
+	public function render_native_features( $is_active = false ) {
 		$features     = NativeFeatures::get_features();
 		$statuses     = NativeFeatures::get_features_with_status();
 		$summary      = NativeFeatures::get_status_summary();
 		$tokens_count = DeviceTokensDb::count_tokens();
 		?>
-		<div id="tab-features" class="bizgrowth360-tab-content">
+		<div id="tab-features" class="bizgrowth360-tab-content <?php echo ! empty( $is_active ) ? 'active' : ''; ?>">
 			<!-- Dashboard Summary Bar -->
 			<div class="bizgrowth360-card bg360-features-dashboard">
 				<div class="bg360-features-header">
@@ -1535,9 +1556,9 @@ class AdminPage {
 	/**
 	 * Render TAB 5: Subscription section.
 	 */
-	public function render_subscription_section() {
+	public function render_subscription_section( $is_active = false ) {
 		?>
-		<div id="tab-subscription" class="bizgrowth360-tab-content">
+		<div id="tab-subscription" class="bizgrowth360-tab-content <?php echo ! empty( $is_active ) ? 'active' : ''; ?>">
 			<div class="bizgrowth360-subscription-wrap" style="max-width: 900px; margin: 20px auto; padding: 10px;">
 				<!-- Header Intro -->
 				<div style="text-align: center; margin-bottom: 36px;">
