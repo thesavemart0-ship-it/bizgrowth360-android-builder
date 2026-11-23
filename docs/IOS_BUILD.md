@@ -201,10 +201,11 @@ At the time this document was written:
   generation, bundle ID validation, IPA structural validation and workflow
   security checks were tested locally.
 - A real macOS validation run completed successfully on `macos-15` with Xcode
-  16.4: run `45121266077` generated the project, synced Capacitor plugins,
-  installed CocoaPods, compiled `App.app` for the iOS Simulator and uploaded the
-  build summary/log artifact. It reported `IPA: Not generated` and did not claim
-  a signed IPA.
+  16.4: run `45122761085` (and earlier run `45121266077`) generated the project,
+  synced Capacitor plugins (including Push Notifications and Geolocation),
+  installed CocoaPods, compiled `App.app` for the iOS Simulator with
+  `** BUILD SUCCEEDED **`, and uploaded the build summary/log artifact. It
+  reported `IPA: Not generated` and did not claim a signed IPA.
 - A real signed IPA was **not** built because no Apple Developer certificate or
   provisioning profile was available.
 - A TestFlight upload was **not** performed because no App Store Connect API key
@@ -213,6 +214,8 @@ At the time this document was written:
 
 The `macos-14` label was not assigned a runner in this repository and the run was
 cancelled before any step executed. Use `macos-15`.
+
+![Successful macOS validation build](screenshots/ios-validation-run.jpeg)
 
 Do not treat the iOS build as production-verified until a real macOS run
 produces a signed IPA and (optionally) a TestFlight upload with your credentials.

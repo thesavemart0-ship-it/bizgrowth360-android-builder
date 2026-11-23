@@ -245,9 +245,10 @@ The endpoint also accepts `platform=android|ios`. iOS clients use
 The same Native Features configuration is applied to the generated iOS project:
 
 - **Push notifications** — `@capacitor/push-notifications`; `aps-environment`
-  entitlement and `remote-notification` background mode. Requires the Push
-  Notifications capability in the provisioning profile. APNs tokens are stored
-  with `platform=ios` and are not sent through FCM.
+  entitlement and `remote-notification` background mode. The generated
+  AppDelegate forwards APNs registration callbacks to Capacitor. Requires the
+  Push Notifications capability in the provisioning profile. APNs tokens are
+  stored with `platform=ios` and are not sent through FCM.
 - **Deep links** — custom URL schemes are written to `CFBundleURLTypes`; Universal
   Links use the Associated Domains entitlement plus the dynamic
   `/.well-known/apple-app-site-association` endpoint.
