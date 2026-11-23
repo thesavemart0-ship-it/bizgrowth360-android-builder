@@ -3,7 +3,7 @@
  * Plugin Name:       Bizgrowth360 App Builder
  * Plugin URI:        https://www.bizgrowth360.in
  * Description:       Build real Android APK/AAB and iOS IPA packages for your WordPress website directly from your admin dashboard using GitHub Actions.
- * Version:           1.3.1
+ * Version:           1.3.2
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Bizgrowth360
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BIZGROWTH360_APP_BUILDER_VERSION', '1.3.1' );
+define( 'BIZGROWTH360_APP_BUILDER_VERSION', '1.3.2' );
 define( 'BIZGROWTH360_APP_BUILDER_PATH', plugin_dir_path( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_URL', plugin_dir_url( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
@@ -120,6 +120,15 @@ function bizgrowth360_app_builder_init() {
 
 	// Billing schema depends on the SaaS workspace/app/build tables.
 	\Bizgrowth360\AppBuilder\Billing\BillingDb::maybe_upgrade();
+
+	// Ensure customer-facing billing pages exist even when the schema version
+	// was already installed by an earlier partial deployment.
+	$pricing_page   = (int) get_option( 'bizgrowth360_pricing_page_id', 0 );
+	$dashboard_page = (int) get_option( 'bizgrowth360_dashboard_page_id', 0 );
+	if ( ! $pricing_page || ! $dashboard_page || ! get_post( $pricing_page ) || ! get_post( $dashboard_page ) ) {
+		\Bizgrowth360\AppBuilder\Billing\BillingShortcodes::ensure_pages();
+		flush_rewrite_rules( false );
+	}
 }
 add_action( 'plugins_loaded', 'bizgrowth360_app_builder_init' );
 
