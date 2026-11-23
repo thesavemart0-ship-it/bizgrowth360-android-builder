@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name:       Bizgrowth360 Android App Builder
+ * Plugin Name:       Bizgrowth360 App Builder
  * Plugin URI:        https://www.bizgrowth360.in
- * Description:       Build real Android APK and AAB packages for your WordPress website directly from your admin dashboard using GitHub Actions.
+ * Description:       Build real Android APK/AAB and iOS IPA packages for your WordPress website directly from your admin dashboard using GitHub Actions.
  * Version:           1.1.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
@@ -73,5 +73,11 @@ function bizgrowth360_app_builder_activate() {
 	$settings->set_defaults();
 	\Bizgrowth360\AppBuilder\BuildDb::install_table();
 	\Bizgrowth360\AppBuilder\DeviceTokensDb::install_table();
+
+	// Register the /.well-known/* rewrite rules before flushing so Apple and
+	// Android domain verification work immediately after activation.
+	$rest_api = new \Bizgrowth360\AppBuilder\RestApi();
+	$rest_api->register_well_known_rewrite();
+	flush_rewrite_rules();
 }
 register_activation_hook( __FILE__, 'bizgrowth360_app_builder_activate' );

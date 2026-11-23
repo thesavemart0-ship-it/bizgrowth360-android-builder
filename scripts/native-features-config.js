@@ -75,7 +75,8 @@ function defaultFeatures(appConfig = {}) {
       mode: 'recommended',
       changelog: 'Performance improvements and bug fixes.',
       play_store_url: '',
-      direct_apk_url: ''
+      direct_apk_url: '',
+      app_store_url: ''
     }
   };
 }
@@ -238,6 +239,9 @@ function validateFeatures(raw, appConfig = {}) {
     if (typeof u.direct_apk_url === 'string') {
       normalized.app_updates.direct_apk_url = u.direct_apk_url.trim();
     }
+    if (typeof u.app_store_url === 'string') {
+      normalized.app_updates.app_store_url = u.app_store_url.trim();
+    }
   }
 
   return {
@@ -273,6 +277,9 @@ function featuresSummary(features) {
   summary.push(`Offline Engine: ${features.offline_engine?.enabled ? 'ENABLED' : 'DISABLED'} (auto_reconnect=${features.offline_engine?.auto_reconnect})`);
   summary.push(`Location Permission: ${features.permission_manager?.location_enabled ? 'REQUESTED' : 'NONE'}`);
   summary.push(`In-App Updates: ${features.app_updates?.enabled ? `ENABLED (${features.app_updates.mode}, min=${features.app_updates.min_version_code}, latest=${features.app_updates.latest_version_code})` : 'DISABLED'}`);
+  if (features.app_updates?.app_store_url) {
+    summary.push(`  - iOS App Store: ${features.app_updates.app_store_url}`);
+  }
 
   return summary;
 }
