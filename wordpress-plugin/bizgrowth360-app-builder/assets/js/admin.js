@@ -445,11 +445,22 @@
 					showNotice(res.data.message || 'Build trigger failed.', 'error');
 					loadHistory(1);
 				}
-			}).fail(function () {
+			}).fail(function (xhr) {
 				stopTimer();
-				updateBuildStatus('failed', 'Network Error');
+				updateBuildStatus('failed', 'Dispatch Failed');
 				$('#bg360-cancel-build-btn').hide();
-				showNotice('Network error dispatching build request.', 'error');
+				var errorMsg = 'Network error dispatching build request.';
+				if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+					errorMsg = xhr.responseJSON.data.message;
+				} else if (xhr && xhr.responseText) {
+					try {
+						var parsed = JSON.parse(xhr.responseText);
+						if (parsed && parsed.data && parsed.data.message) {
+							errorMsg = parsed.data.message;
+						}
+					} catch (e) {}
+				}
+				showNotice(errorMsg, 'error');
 			});
 		});
 	}

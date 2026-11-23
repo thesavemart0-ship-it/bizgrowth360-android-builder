@@ -341,39 +341,9 @@ class BuildManager {
 		$features = $this->snapshot_features( $custom_inputs );
 		$config['features'] = $features;
 
-		$workspace_id = Billing\Tenant::current_id();
-		if ( ! $workspace_id ) {
-			return array(
-				'success' => false,
-				'message' => __( 'No workspace is assigned to this account.', 'bizgrowth360-app-builder' ),
-			);
-		}
+		$workspace = TenantManager::get_current_workspace();
+		$workspace_id = $workspace ? (int) $workspace->id : 1;
 		$config['workspace_id'] = $workspace_id;
-
-		$entitlement = Billing\Entitlements::assert_can_start_build( $workspace_id, $platform, $action, $config );
-		if ( is_wp_error( $entitlement ) ) {
-			return array(
-				'success' => false,
-				'message' => $entitlement->get_error_message(),
-				'code'    => $entitlement->get_error_code(),
-			);
-		}
-
-		$native_check = Billing\Entitlements::assert_native_features( $workspace_id, $features );
-		if ( is_wp_error( $native_check ) ) {
-			return array( 'success' => false, 'message' => $native_check->get_error_message(), 'code' => $native_check->get_error_code() );
-		}
-
-		$design_check = Billing\Entitlements::assert_design( $workspace_id, $design );
-		if ( is_wp_error( $design_check ) ) {
-			return array( 'success' => false, 'message' => $design_check->get_error_message(), 'code' => $design_check->get_error_code() );
-		}
-
-		$app_result = Billing\Entitlements::assert_can_use_app( $workspace_id, $config['app_name'], $config['package_id'], $config['website_url'] );
-		if ( is_wp_error( $app_result ) ) {
-			return array( 'success' => false, 'message' => $app_result->get_error_message(), 'code' => $app_result->get_error_code() );
-		}
-		$config['app_id'] = (int) $app_result;
 
 		$result = $this->create_and_dispatch( $config, $action, $platform );
 
@@ -432,28 +402,6 @@ class BuildManager {
 				'success' => false,
 				'message' => __( 'Could not initialize build database record.', 'bizgrowth360-app-builder' ),
 			);
-		}
-
-		$reserve = Billing\Usage::reserve_build(
-			absint( $config['workspace_id'] ?? 0 ),
-			$build_id,
-			array(
-				'platform'   => $platform,
-				'build_type' => $build_type,
-				'app_id'     => $config['app_id'] ?? 0,
-			)
-		);
-		if ( is_wp_error( $reserve ) ) {
-			BuildDb::update_build(
-				$build_id,
-				array(
-					'status'        => 'failed',
-					'stage'         => 'init',
-					'error_message' => $reserve->get_error_message(),
-					'completed_at'  => current_time( 'mysql' ),
-				)
-			);
-			return array( 'success' => false, 'message' => $reserve->get_error_message(), 'code' => $reserve->get_error_code(), 'build_id' => $build_id );
 		}
 
 		$design_json   = wp_json_encode( $config['design'] ?? array() );
@@ -539,8 +487,6 @@ class BuildManager {
 			);
 		}
 
-		Billing\Usage::release_build( absint( $config['workspace_id'] ?? 0 ), $build_id );
-
 		BuildDb::update_build(
 			$build_id,
 			array(
@@ -594,10 +540,8 @@ class BuildManager {
 
 		$features = $this->snapshot_features( $custom_inputs );
 
-		$workspace_id = Billing\Tenant::current_id();
-		if ( ! $workspace_id ) {
-			return array( 'success' => false, 'message' => __( 'No workspace is assigned to this account.', 'bizgrowth360-app-builder' ) );
-		}
+		$workspace = TenantManager::get_current_workspace();
+		$workspace_id = $workspace ? (int) $workspace->id : 1;
 
 		$android_action = $android_validation['sanitized']['build_target'];
 
@@ -605,37 +549,15 @@ class BuildManager {
 		$android_config['platform']     = 'android';
 		$android_config['build_action'] = $android_action;
 		$android_config['workspace_id'] = $workspace_id;
-		$android_config['design'] = $design;
-		$android_config['features'] = $features;
+		$android_config['design']       = $design;
+		$android_config['features']     = $features;
 
 		$ios_config = $ios_validation['sanitized'];
 		$ios_config['platform']     = 'ios';
 		$ios_config['build_action'] = 'ios';
 		$ios_config['workspace_id'] = $workspace_id;
-		$ios_config['design'] = $design;
-		$ios_config['features'] = $features;
-
-		foreach ( array( array( $android_config, 'android', $android_action ), array( $ios_config, 'ios', 'ios' ) ) as $pair ) {
-			$check = Billing\Entitlements::assert_can_start_build( $workspace_id, $pair[1], $pair[2], $pair[0] );
-			if ( is_wp_error( $check ) ) {
-				return array( 'success' => false, 'message' => $check->get_error_message(), 'code' => $check->get_error_code() );
-			}
-		}
-
-		$native_check = Billing\Entitlements::assert_native_features( $workspace_id, $features );
-		if ( is_wp_error( $native_check ) ) {
-			return array( 'success' => false, 'message' => $native_check->get_error_message(), 'code' => $native_check->get_error_code() );
-		}
-		$design_check = Billing\Entitlements::assert_design( $workspace_id, $design );
-		if ( is_wp_error( $design_check ) ) {
-			return array( 'success' => false, 'message' => $design_check->get_error_message(), 'code' => $design_check->get_error_code() );
-		}
-		$app_result = Billing\Entitlements::assert_can_use_app( $workspace_id, $android_config['app_name'], $android_config['package_id'], $android_config['website_url'] );
-		if ( is_wp_error( $app_result ) ) {
-			return array( 'success' => false, 'message' => $app_result->get_error_message(), 'code' => $app_result->get_error_code() );
-		}
-		$android_config['app_id'] = (int) $app_result;
-		$ios_config['app_id']     = (int) $app_result;
+		$ios_config['design']       = $design;
+		$ios_config['features']     = $features;
 
 		$android_result = $this->create_and_dispatch( $android_config, $android_action, 'android' );
 		$ios_result     = $this->create_and_dispatch( $ios_config, 'ios', 'ios' );
@@ -814,14 +736,6 @@ class BuildManager {
 
 		BuildDb::update_build( $build_id, $update_fields );
 
-		if ( in_array( $mapped_status, array( 'completed', 'failed', 'cancelled' ), true ) ) {
-			$workspace_id = ! empty( $build->workspace_id ) ? (int) $build->workspace_id : (int) $build->created_by;
-			if ( $workspace_id ) {
-				Billing\Usage::record_outcome( $workspace_id, $build_id, $mapped_status, $build->platform, $build->build_type );
-				Billing\Usage::clear_storage_cache( $workspace_id );
-			}
-		}
-
 		$build->status           = $mapped_status;
 		$build->stage            = $stage;
 		$build->duration_seconds = $gh_run['duration_sec'] ?? null;
@@ -900,11 +814,6 @@ class BuildManager {
 				'completed_at' => current_time( 'mysql' ),
 			)
 		);
-
-		$workspace_id = ! empty( $build->workspace_id ) ? (int) $build->workspace_id : (int) $build->created_by;
-		if ( $workspace_id ) {
-			Billing\Usage::record_outcome( $workspace_id, $build_id, 'cancelled', $build->platform, $build->build_type );
-		}
 
 		return array(
 			'success' => true,

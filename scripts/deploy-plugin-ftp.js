@@ -7,10 +7,7 @@ async function deployAndConfigure() {
     if (!process.env.FTP_HOST || !process.env.FTP_USER || !process.env.FTP_PASSWORD) {
         throw new Error('FTP_HOST, FTP_USER and FTP_PASSWORD environment variables are required.');
     }
-    const githubToken = process.env.BIZGROWTH360_GITHUB_TOKEN;
-    if (!githubToken) {
-        throw new Error('BIZGROWTH360_GITHUB_TOKEN environment variable is required for wp-config injection.');
-    }
+    const githubToken = process.env.BIZGROWTH360_GITHUB_TOKEN || '';
     const client = new ftp.Client();
     client.ftp.verbose = false;
 
@@ -90,6 +87,16 @@ $client = new \\Bizgrowth360\\AppBuilder\\GitHubClient($settings);
 $runs = $client->get_workflow_runs(3);
 $latest_run = !empty($runs['runs'][0]) ? $runs['runs'][0] : null;
 
+// Test 3b: Test BuildManager input validation and readiness
+$bm = new \\Bizgrowth360\\AppBuilder\\BuildManager($settings, $client);
+$test_val = $bm->validate_inputs([
+    'app_name' => 'TownConnect',
+    'package_id' => 'com.townconnectai.app',
+    'website_url' => 'https://wordpress.townconnectai.com',
+    'version_name' => '1.0.0',
+    'version_code' => 1
+]);
+
 // Test 4: Missing token error verification
 $token_error_message = '';
 if (!\\Bizgrowth360\\AppBuilder\\Config::has_token()) {
@@ -105,7 +112,8 @@ echo json_encode([
     'preserved_package_id' => $current_options['package_id'] ?? null,
     'preserved_website_url' => $current_options['website_url'] ?? null,
     'recent_runs_count' => isset($runs['runs']) ? count($runs['runs']) : 0,
-    'latest_run' => $latest_run
+    'latest_run' => $latest_run,
+    'build_manager_ready' => $test_val['valid'] ?? false
 ], JSON_PRETTY_PRINT);
 `;
 
