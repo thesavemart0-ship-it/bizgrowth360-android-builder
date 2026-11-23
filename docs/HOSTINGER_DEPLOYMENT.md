@@ -64,6 +64,13 @@ The plugin sends the Phase 3 contract:
 
 A single HTTP 422 fallback also supports the older Phase 2 workflow inputs during migration. Once `main` contains the Phase 3 workflow, the fallback is not used.
 
+Verified after deployment:
+
+- `main` now contains the Phase 3 workflow (`build_variant`, isolated `build-app.js`).
+- Push build `45109616293`: SUCCESS, produced APK + AAB.
+- Phase 3 contract build `45109935270`: SUCCESS, `Mahankali Store` APK verified after download.
+- GitHub artifact names: `Demo-Website-App-1.0.0-APK/AAB`, `Mahankali-Store-1.0.0-APK`.
+
 ## Critical follow-up
 
 The following credentials were exposed in chat and one (the FTP password) exists in public Git history:

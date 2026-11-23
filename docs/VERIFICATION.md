@@ -134,7 +134,29 @@ Verified after download:
 
 ---
 
-## 7. Not executed in this environment
+## 7. WordPress plugin / Phase 3 dispatch contract
+
+The exact Phase 3 input contract used by the deployed WordPress plugin was dispatched through the GitHub API:
+
+- App: `Mahankali Store`
+- Package: `in.bizgrowth360.mahankalistore`
+- URL: `https://mahankalistore.example.com`
+- Mode: `apk / debug`
+- Version: `1.0.0 (1)`
+
+Result: **SUCCESS** — run `45109935270`.
+
+Downloaded artifact:
+
+| Artifact | File | Size | SHA-256 |
+| :--- | :--- | :--- | :--- |
+| `Mahankali-Store-1.0.0-APK` | `Mahankali-Store-1.0.0-debug.apk` | 4.16 MB | `3f2de978418e664b2d4f47dbd65fab727b0a4c0c01b1498ee09e4caa6ccd578e` |
+
+Strict validation after download confirmed `aapt2` package ID, launcher label `Mahankali Store`, version `1.0.0 (1)`, website URL, bundled runtime config and APK signature. This is the same contract the plugin sends from WordPress; the plugin UI itself was not clicked because WordPress admin credentials were not available.
+
+---
+
+## 8. Not executed in this environment
 
 These require a physical/emulated device and are **not claimed as passing**:
 
