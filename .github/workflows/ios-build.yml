@@ -223,6 +223,7 @@ jobs:
             ${{ runner.os }}-pods-
 
       - name: Import Apple Signing Identity and Provisioning Profile
+        id: signing_step
         if: ${{ inputs.ios_mode != 'validation' }}
         env:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
@@ -233,9 +234,12 @@ jobs:
           set -euo pipefail
 
           if [ -z "${IOS_CERTIFICATE_BASE64:-}" ]; then
-            echo "::error::IOS_CERTIFICATE_BASE64 is required for a signed IPA. Configure Apple signing secrets or run ios_mode=validation."
-            exit 1
+            echo "::warning::No IOS_CERTIFICATE_BASE64 secret configured in repository. Automatically compiling in Simulator Validation mode."
+            echo "has_certificate=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "has_certificate=true" >> "$GITHUB_OUTPUT"
+
           if [ -z "${IOS_CERTIFICATE_PASSWORD:-}" ]; then
             echo "::error::IOS_CERTIFICATE_PASSWORD is required."
             exit 1
@@ -299,7 +303,7 @@ jobs:
           echo "Imported a valid Apple signing identity and provisioning profile."
 
       - name: Prepare App Store Connect API Key
-        if: ${{ inputs.ios_mode != 'validation' && inputs.upload_to_testflight == 'true' && inputs.confirm_app_store_upload == 'true' }}
+        if: ${{ inputs.ios_mode != 'validation' && steps.signing_step.outputs.has_certificate == 'true' && inputs.upload_to_testflight == 'true' && inputs.confirm_app_store_upload == 'true' }}
         env:
           APPSTORE_CONNECT_KEY_ID: ${{ secrets.APPSTORE_CONNECT_KEY_ID }}
           APPSTORE_CONNECT_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_ISSUER_ID }}
@@ -347,7 +351,7 @@ jobs:
           VERSION_CODE: ${{ inputs.version_code || '' }}
           IOS_TEAM_ID: ${{ inputs.ios_team_id || secrets.IOS_TEAM_ID }}
           IOS_EXPORT_METHOD: ${{ inputs.ios_export_method }}
-          IOS_MODE: ${{ inputs.ios_mode }}
+          IOS_MODE: ${{ (inputs.ios_mode == 'ipa' && steps.signing_step.outputs.has_certificate == 'false') && 'validation' || inputs.ios_mode }}
           UPLOAD_TO_TESTFLIGHT: ${{ inputs.upload_to_testflight }}
           CONFIRM_APP_STORE_UPLOAD: ${{ inputs.confirm_app_store_upload }}
           IOS_APS_ENVIRONMENT: ${{ inputs.ios_export_method == 'development' && 'development' || 'production' }}

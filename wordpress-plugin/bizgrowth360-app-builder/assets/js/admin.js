@@ -597,7 +597,7 @@
 				stopTimer();
 				$('#bg360-cancel-build-btn').hide();
 				updateBuildStatus(b.status, b.status === 'cancelled' ? 'Build Cancelled' : 'Build Failed');
-				$('#bg360-run-subtitle').text(b.status === 'cancelled' ? bizgrowth360AppBuilder.strings.build_cancelled : bizgrowth360AppBuilder.strings.build_failed);
+				$('#bg360-run-subtitle').text(b.status === 'cancelled' ? bizgrowth360AppBuilder.strings.build_cancelled : (b.error_message || bizgrowth360AppBuilder.strings.build_failed));
 				$('.bg360-stage').removeClass('active');
 				loadHistory(1);
 			}

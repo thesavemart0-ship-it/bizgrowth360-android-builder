@@ -664,9 +664,13 @@ class BuildManager {
 		$conc   = $gh_run['conclusion'];
 		$stage  = 'init';
 
+		$failed_step_name = '';
 		if ( $jobs_data['success'] && ! empty( $jobs_data['jobs'] ) ) {
 			$steps = $jobs_data['jobs'][0]['steps'] ?? array();
 			foreach ( $steps as $step ) {
+				if ( ( $step['conclusion'] ?? '' ) === 'failure' ) {
+					$failed_step_name = $step['name'] ?? '';
+				}
 				$s_name = strtolower( $step['name'] ?? '' );
 				$s_stat = $step['status'] ?? '';
 				if ( 'in_progress' !== $s_stat && 'completed' !== $s_stat ) {
@@ -724,6 +728,23 @@ class BuildManager {
 			'stage'            => $stage,
 			'duration_seconds' => $gh_run['duration_sec'] ?? null,
 		);
+
+		if ( 'failed' === $mapped_status ) {
+			if ( ! empty( $failed_step_name ) ) {
+				if ( false !== stripos( $failed_step_name, 'signing' ) || false !== stripos( $failed_step_name, 'certificate' ) || false !== stripos( $failed_step_name, 'provisioning' ) ) {
+					if ( 'ios' === $build->platform ) {
+						$update_fields['error_message'] = __( 'Apple Code Signing Failed: IOS_CERTIFICATE_BASE64 and IOS_CERTIFICATE_PASSWORD secrets are not configured in your GitHub repository. Please configure Apple Distribution secrets in GitHub or switch Build Mode to "Simulator Validation".', 'bizgrowth360-app-builder' );
+					} else {
+						$update_fields['error_message'] = __( 'Android Signing Failed: Invalid or missing keystore configuration.', 'bizgrowth360-app-builder' );
+					}
+				} else {
+					$update_fields['error_message'] = sprintf( __( 'Build failed at step: %s. Check build logs for details.', 'bizgrowth360-app-builder' ), $failed_step_name );
+				}
+			} else {
+				$update_fields['error_message'] = __( 'Cloud compilation failed. Please inspect build logs.', 'bizgrowth360-app-builder' );
+			}
+			$build->error_message = $update_fields['error_message'];
+		}
 
 		if ( 'completed' === $mapped_status ) {
 			$update_fields['completed_at'] = current_time( 'mysql' );
