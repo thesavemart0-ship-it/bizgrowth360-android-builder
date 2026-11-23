@@ -1,0 +1,320 @@
+name: Bizgrowth360 Legacy Static Build (Regression)
+
+# Phase 2 workflow, preserved for regression verification only.
+# New builds must use android-build.yml (isolated dynamic build engine).
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'App Display Name'
+        required: false
+        type: string
+        default: 'Demo Website App'
+      package_id:
+        description: 'Android Package ID (e.g. in.bizgrowth360.demoapp)'
+        required: false
+        type: string
+        default: 'in.bizgrowth360.demoapp'
+      website_url:
+        description: 'Website URL to load inside the app (must be HTTPS)'
+        required: false
+        type: string
+        default: 'https://example.com'
+      version_name:
+        description: 'Version Name (e.g. 1.0.0)'
+        required: false
+        type: string
+        default: '1.0.0'
+      version_code:
+        description: 'Version Code (positive integer >= 1)'
+        required: false
+        type: number
+        default: 1
+      build_type:
+        description: 'Build Type'
+        required: false
+        type: choice
+        options:
+          - 'both'
+          - 'release'
+          - 'debug'
+        default: 'both'
+      build_target:
+        description: 'Build Target'
+        required: false
+        type: choice
+        options:
+          - 'both'
+          - 'apk'
+          - 'aab'
+        default: 'both'
+      config_file:
+        description: 'Path to custom JSON configuration (optional)'
+        required: false
+        type: string
+        default: 'config/default-app.json'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    name: Build Android Packages (${{ inputs.build_target || 'both' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('app-template/android/gradle/wrapper/gradle-wrapper.properties', 'app-template/android/**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install Root Dependencies
+        run: |
+          npm ci || npm install
+
+      - name: Install App Template Dependencies
+        run: |
+          cd app-template
+          npm ci || npm install
+
+      - name: Validate App Configuration
+        run: |
+          echo "Validating configuration..."
+          CONFIG_FILE="${{ inputs.config_file || 'config/default-app.json' }}"
+          node scripts/validate-config.js "$CONFIG_FILE"
+
+      - name: Prepare Android Project
+        id: prepare
+        run: |
+          echo "Applying dynamic configuration to Android project..."
+          node scripts/prepare-app.js \
+            --config "${{ inputs.config_file || 'config/default-app.json' }}" \
+            --app-name "${{ inputs.app_name || '' }}" \
+            --package-id "${{ inputs.package_id || '' }}" \
+            --website-url "${{ inputs.website_url || '' }}" \
+            --version-name "${{ inputs.version_name || '' }}" \
+            --version-code "${{ inputs.version_code || '' }}"
+
+      - name: Generate Branding Assets & Icons
+        run: |
+          echo "Generating launcher mipmaps and splash screens..."
+          node scripts/generate-icons.js \
+            --config "${{ inputs.config_file || 'config/default-app.json' }}" \
+            --app-name "${{ inputs.app_name || '' }}"
+
+      - name: Capacitor Sync
+        run: |
+          echo "Syncing Capacitor web assets with Android..."
+          cd app-template
+          npx cap sync android
+
+      - name: Configure Release Signing Keystore
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "::add-mask::$KEYSTORE_PASSWORD"
+            echo "::add-mask::$KEY_PASSWORD"
+            echo "::add-mask::$KEY_ALIAS"
+            
+            KEYSTORE_DIR="$RUNNER_TEMP/keystore"
+            mkdir -p "$KEYSTORE_DIR"
+            KEYSTORE_FILE="$KEYSTORE_DIR/release.jks"
+            
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+            
+            if [ -s "$KEYSTORE_FILE" ]; then
+              echo "Production keystore decoded successfully."
+              echo "KEYSTORE_FILE=$KEYSTORE_FILE" >> $GITHUB_ENV
+              echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+              echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+              echo "KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
+              echo "SIGNING_STATUS=Signed with Production Keystore" >> $GITHUB_ENV
+              echo "has_keystore=true" >> $GITHUB_OUTPUT
+            else
+              echo "::warning::Decoded keystore file is empty. Falling back to unsigned/debug signing."
+              echo "SIGNING_STATUS=Unsigned / Debug Signed (Decoded Key Empty)" >> $GITHUB_ENV
+              echo "has_keystore=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "::notice::No ANDROID_KEYSTORE_BASE64 secret found. Builds will be unsigned / debug-signed for local testing."
+            echo "SIGNING_STATUS=Unsigned / Debug Signed (Missing Repository Secrets)" >> $GITHUB_ENV
+            echo "has_keystore=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: |
+          chmod +x app-template/android/gradlew
+
+      - name: Build Android Packages
+        id: build
+        env:
+          BUILD_TYPE: ${{ inputs.build_type || 'both' }}
+          BUILD_TARGET: ${{ inputs.build_target || 'both' }}
+        run: |
+          cd app-template/android
+          
+          # APK Builds
+          if [ "$BUILD_TARGET" = "both" ] || [ "$BUILD_TARGET" = "apk" ]; then
+            if [ "$BUILD_TYPE" = "both" ] || [ "$BUILD_TYPE" = "debug" ]; then
+              echo ">>> Building Debug APK..."
+              ./gradlew assembleDebug --stacktrace
+            fi
+            if [ "$BUILD_TYPE" = "both" ] || [ "$BUILD_TYPE" = "release" ]; then
+              echo ">>> Building Release APK..."
+              ./gradlew assembleRelease --stacktrace
+            fi
+          fi
+          
+          # AAB Builds
+          if [ "$BUILD_TARGET" = "both" ] || [ "$BUILD_TARGET" = "aab" ]; then
+            if [ "$BUILD_TYPE" = "both" ] || [ "$BUILD_TYPE" = "release" ]; then
+              echo ">>> Building Release AAB (App Bundle)..."
+              ./gradlew bundleRelease --stacktrace
+            fi
+            if [ "$BUILD_TYPE" = "debug" ]; then
+              echo ">>> Building Debug AAB (App Bundle)..."
+              ./gradlew bundleDebug --stacktrace
+            fi
+          fi
+
+      - name: Organize Build Output Artifacts
+        id: organize
+        run: |
+          mkdir -p dist/apk dist/aab
+          
+          APP_NAME="${{ inputs.app_name || 'Bizgrowth360' }}"
+          SAFE_APP_NAME=$(echo "$APP_NAME" | tr -cs 'a-zA-Z0-9' '_' | sed 's/^_*//;s/_*$//')
+          VERSION_NAME="${{ inputs.version_name || '1.0.0' }}"
+          
+          echo "SAFE_APP_NAME=$SAFE_APP_NAME" >> $GITHUB_ENV
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          
+          # Collect APKs
+          find app-template/android/app/build/outputs/apk -type f -name "*.apk" | while read -r apk_file; do
+            filename=$(basename "$apk_file")
+            if [[ "$filename" == *"release"* ]]; then
+              dest="dist/apk/${SAFE_APP_NAME}-${VERSION_NAME}-release.apk"
+            else
+              dest="dist/apk/${SAFE_APP_NAME}-${VERSION_NAME}-debug.apk"
+            fi
+            cp -v "$apk_file" "$dest"
+          done
+          
+          # Collect AABs
+          find app-template/android/app/build/outputs/bundle -type f -name "*.aab" | while read -r aab_file; do
+            filename=$(basename "$aab_file")
+            if [[ "$filename" == *"release"* ]]; then
+              dest="dist/aab/${SAFE_APP_NAME}-${VERSION_NAME}-release.aab"
+            else
+              dest="dist/aab/${SAFE_APP_NAME}-${VERSION_NAME}-debug.aab"
+            fi
+            cp -v "$aab_file" "$dest"
+          done
+          
+          echo "Listing organized artifacts:"
+          ls -lh dist/apk/ || true
+          ls -lh dist/aab/ || true
+
+      - name: Validate Output Artifacts
+        run: |
+          echo "Running rigorous package structure validation..."
+          APK_PATHS=$(find dist/apk -type f -name "*.apk" | tr '\n' ' ')
+          AAB_PATHS=$(find dist/aab -type f -name "*.aab" | tr '\n' ' ')
+          
+          CMD="node scripts/validate-output.js --config '${{ inputs.config_file || 'config/default-app.json' }}'"
+          if [ -n "$APK_PATHS" ]; then
+            FIRST_APK=$(echo $APK_PATHS | awk '{print $1}')
+            CMD="$CMD --apk $FIRST_APK"
+          fi
+          if [ -n "$AAB_PATHS" ]; then
+            FIRST_AAB=$(echo $AAB_PATHS | awk '{print $1}')
+            CMD="$CMD --aab $FIRST_AAB"
+          fi
+          
+          eval $CMD
+
+      - name: Upload APK Build Artifacts
+        if: success() && (inputs.build_target == '' || inputs.build_target == 'both' || inputs.build_target == 'apk' || github.event_name == 'push')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bizgrowth360-${{ env.SAFE_APP_NAME || 'App' }}-${{ env.VERSION_NAME || '1.0.0' }}-APK
+          path: dist/apk/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload AAB Build Artifacts
+        if: success() && (inputs.build_target == '' || inputs.build_target == 'both' || inputs.build_target == 'aab' || github.event_name == 'push')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bizgrowth360-${{ env.SAFE_APP_NAME || 'App' }}-${{ env.VERSION_NAME || '1.0.0' }}-AAB
+          path: dist/aab/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Secure Cleanup of Sensitive Keystore Files
+        if: always()
+        run: |
+          if [ -n "$RUNNER_TEMP" ] && [ -d "$RUNNER_TEMP/keystore" ]; then
+            echo "Securely erasing temporary keystore files..."
+            rm -rf "$RUNNER_TEMP/keystore"
+          fi
+
+      - name: Generate Build Summary
+        if: always()
+        run: |
+          echo "## 🚀 Bizgrowth360 Android Automated Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **App Name** | \`${{ inputs.app_name || 'Demo Website App' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Package ID** | \`${{ inputs.package_id || 'in.bizgrowth360.demoapp' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Website URL** | \`${{ inputs.website_url || 'https://example.com' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ inputs.version_name || '1.0.0' }} (Code: ${{ inputs.version_code || 1 }})\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Target** | \`${{ inputs.build_target || 'both' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Type** | \`${{ inputs.build_type || 'both' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Signing Status** | **${{ env.SIGNING_STATUS || 'Unsigned / Debug' }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Status** | **${{ job.status }}** |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -d "dist" ]; then
+            echo "### 📦 Generated Artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| File | Type | Size | SHA-256 |" >> $GITHUB_STEP_SUMMARY
+            echo "| :--- | :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+            find dist -type f \( -name "*.apk" -o -name "*.aab" \) | while read -r f; do
+              fname=$(basename "$f")
+              fsize=$(ls -lh "$f" | awk '{print $5}')
+              fhash=$(sha256sum "$f" | awk '{print $1}' | cut -c1-16)...
+              ftype="APK"
+              if [[ "$fname" == *".aab" ]]; then ftype="AAB (App Bundle)"; fi
+              echo "| \`$fname\` | $ftype | $fsize | \`$fhash\` |" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> Download build packages from the **Artifacts** section at the top of this run." >> $GITHUB_STEP_SUMMARY
