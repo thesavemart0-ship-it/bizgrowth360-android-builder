@@ -139,7 +139,7 @@ function buildEntitlements(config, design, features, ios) {
 
   if (features.push_notifications && features.push_notifications.enabled) {
     entitlements['aps-environment'] = process.env.IOS_APS_ENVIRONMENT ||
-      (config.build_variant === 'debug' ? 'development' : 'production');
+      ((ios && ios.export_method === 'development') || config.build_variant === 'debug' ? 'development' : 'production');
   }
 
   if (features.deep_linking && features.deep_linking.enabled) {
