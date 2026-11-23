@@ -1,0 +1,835 @@
+/**
+ * Bizgrowth360 App Builder SaaS Customer Portal Styles
+ */
+
+:root {
+	--bg360-primary: #7C3AED;
+	--bg360-primary-hover: #6D28D9;
+	--bg360-surface: #FFFFFF;
+	--bg360-bg: #F8FAFC;
+	--bg360-text-main: #0F172A;
+	--bg360-text-muted: #64748B;
+	--bg360-border: #E2E8F0;
+	--bg360-radius: 12px;
+	--bg360-shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+	--bg360-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
+	--bg360-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body.bg360-portal-body {
+	margin: 0;
+	padding: 0;
+	background-color: var(--bg360-bg);
+	color: var(--bg360-text-main);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* -------------------------------------------------------------------------
+ * AUTH VIEWS (Sign In / Register / Reset)
+ * ------------------------------------------------------------------------- */
+.bg360-auth-wrapper {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	background: linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%);
+}
+
+.bg360-auth-card {
+	width: 100%;
+	max-width: 480px;
+	background: var(--bg360-surface);
+	border-radius: 16px;
+	padding: 36px;
+	box-shadow: var(--bg360-shadow-lg);
+	border: 1px solid var(--bg360-border);
+}
+
+.bg360-auth-brand {
+	text-align: center;
+	margin-bottom: 24px;
+}
+
+.bg360-auth-brand .bg360-brand-icon {
+	width: 56px;
+	height: 56px;
+	margin: 0 auto 12px;
+	background: var(--bg360-primary);
+	color: #FFFFFF;
+	border-radius: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 28px;
+}
+
+.bg360-auth-brand h2 {
+	margin: 0 0 6px;
+	font-size: 22px;
+	font-weight: 700;
+	color: var(--bg360-text-main);
+}
+
+.bg360-auth-brand p {
+	margin: 0;
+	color: var(--bg360-text-muted);
+	font-size: 14px;
+}
+
+.bg360-auth-tabs {
+	display: flex;
+	border-bottom: 2px solid var(--bg360-border);
+	margin-bottom: 24px;
+}
+
+.bg360-auth-tab {
+	flex: 1;
+	padding: 12px;
+	background: none;
+	border: none;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--bg360-text-muted);
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+	transition: all 0.2s;
+}
+
+.bg360-auth-tab.active {
+	color: var(--bg360-primary);
+	border-bottom-color: var(--bg360-primary);
+}
+
+.bg360-auth-form {
+	display: none;
+}
+
+.bg360-auth-form.active {
+	display: block;
+}
+
+.bg360-auth-options {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 13px;
+	margin-bottom: 20px;
+}
+
+.bg360-auth-options a {
+	color: var(--bg360-primary);
+	text-decoration: none;
+}
+
+/* -------------------------------------------------------------------------
+ * PORTAL MAIN LAYOUT
+ * ------------------------------------------------------------------------- */
+.bg360-portal-layout {
+	display: flex;
+	min-height: 100vh;
+}
+
+/* SIDEBAR */
+.bg360-portal-sidebar {
+	width: 260px;
+	background: #0F172A;
+	color: #FFFFFF;
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	z-index: 100;
+}
+
+.bg360-portal-brand {
+	padding: 24px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	border-bottom: 1px solid #1E293B;
+}
+
+.bg360-portal-brand .bg360-brand-icon {
+	width: 40px;
+	height: 40px;
+	background: var(--bg360-primary);
+	color: #FFFFFF;
+	border-radius: 10px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 22px;
+}
+
+.bg360-portal-brand h3 {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 700;
+	color: #FFFFFF;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 140px;
+}
+
+.bg360-plan-chip {
+	display: inline-block;
+	background: #334155;
+	color: #94A3B8;
+	padding: 2px 8px;
+	border-radius: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.bg360-portal-nav {
+	padding: 20px 12px;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.bg360-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	color: #94A3B8;
+	text-decoration: none;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 500;
+	transition: all 0.2s;
+}
+
+.bg360-nav-item:hover {
+	color: #FFFFFF;
+	background: #1E293B;
+}
+
+.bg360-nav-item.active {
+	color: #FFFFFF;
+	background: var(--bg360-primary);
+}
+
+.bg360-portal-user-footer {
+	padding: 18px 20px;
+	border-top: 1px solid #1E293B;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.bg360-user-info strong {
+	display: block;
+	font-size: 14px;
+	color: #FFFFFF;
+}
+
+.bg360-user-info small {
+	display: block;
+	color: #64748B;
+	font-size: 12px;
+}
+
+.bg360-btn-logout {
+	background: none;
+	border: none;
+	color: #94A3B8;
+	cursor: pointer;
+	padding: 8px;
+	border-radius: 6px;
+	transition: all 0.2s;
+}
+
+.bg360-btn-logout:hover {
+	color: #EF4444;
+	background: #1E293B;
+}
+
+/* MAIN AREA */
+.bg360-portal-main {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	background: var(--bg360-bg);
+}
+
+.bg360-portal-header {
+	height: 70px;
+	background: var(--bg360-surface);
+	border-bottom: 1px solid var(--bg360-border);
+	padding: 0 32px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.bg360-mobile-menu-toggle {
+	display: none;
+	font-size: 24px;
+	cursor: pointer;
+	color: var(--bg360-text-muted);
+}
+
+.bg360-header-title h2 {
+	margin: 0;
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--bg360-text-main);
+}
+
+.bg360-portal-content-body {
+	padding: 32px;
+	flex: 1;
+}
+
+.bg360-view-panel {
+	display: none;
+}
+
+.bg360-view-panel.active {
+	display: block;
+	animation: bg360FadeIn 0.25s ease-in-out;
+}
+
+@keyframes bg360FadeIn {
+	from { opacity: 0; transform: translateY(6px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+/* -------------------------------------------------------------------------
+ * METRIC CARDS
+ * ------------------------------------------------------------------------- */
+.bg360-metric-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 20px;
+	margin-bottom: 28px;
+}
+
+.bg360-metric-card {
+	background: var(--bg360-surface);
+	border: 1px solid var(--bg360-border);
+	border-radius: var(--bg360-radius);
+	padding: 20px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	box-shadow: var(--bg360-shadow-sm);
+}
+
+.bg360-metric-icon {
+	width: 48px;
+	height: 48px;
+	border-radius: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 24px;
+}
+
+.bg360-icon-purple { background: #F3E8FF; color: #7C3AED; }
+.bg360-icon-blue   { background: #DBEAFE; color: #2563EB; }
+.bg360-icon-green  { background: #DCFCE7; color: #16A34A; }
+.bg360-icon-amber  { background: #FEF3C7; color: #D97706; }
+
+.bg360-metric-label {
+	display: block;
+	font-size: 13px;
+	color: var(--bg360-text-muted);
+	font-weight: 500;
+}
+
+.bg360-metric-value {
+	display: block;
+	font-size: 24px;
+	font-weight: 700;
+	color: var(--bg360-text-main);
+	line-height: 1.2;
+}
+
+.bg360-metric-value small {
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--bg360-text-muted);
+}
+
+/* -------------------------------------------------------------------------
+ * CARDS & GRIDS
+ * ------------------------------------------------------------------------- */
+.bg360-portal-grid-2col {
+	display: grid;
+	grid-template-columns: 1.2fr 0.8fr;
+	gap: 24px;
+}
+
+.bg360-portal-card {
+	background: var(--bg360-surface);
+	border: 1px solid var(--bg360-border);
+	border-radius: var(--bg360-radius);
+	box-shadow: var(--bg360-shadow-sm);
+	overflow: hidden;
+}
+
+.bg360-portal-card-header {
+	padding: 20px 24px;
+	border-bottom: 1px solid var(--bg360-border);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.bg360-portal-card-header h3 {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--bg360-text-main);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.bg360-portal-card-body {
+	padding: 24px;
+}
+
+/* APPS GRID */
+.bg360-apps-header-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 24px;
+}
+
+.bg360-apps-header-bar h3 {
+	margin: 0 0 4px;
+	font-size: 20px;
+	font-weight: 700;
+}
+
+.bg360-apps-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+	gap: 24px;
+}
+
+.bg360-app-card {
+	background: var(--bg360-surface);
+	border: 1px solid var(--bg360-border);
+	border-radius: var(--bg360-radius);
+	padding: 20px;
+	box-shadow: var(--bg360-shadow-sm);
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 16px;
+	transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.bg360-app-card:hover {
+	box-shadow: var(--bg360-shadow-md);
+	border-color: #CBD5E1;
+}
+
+.bg360-app-card-top {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+
+.bg360-app-avatar {
+	width: 52px;
+	height: 52px;
+	border-radius: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #FFFFFF;
+	font-size: 26px;
+	flex-shrink: 0;
+	overflow: hidden;
+}
+
+.bg360-app-avatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.bg360-app-meta h4 {
+	margin: 0 0 4px;
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--bg360-text-main);
+}
+
+.bg360-app-meta code {
+	display: block;
+	font-size: 12px;
+	color: #64748B;
+	margin-bottom: 4px;
+}
+
+.bg360-app-url {
+	font-size: 12px;
+	color: var(--bg360-primary);
+	text-decoration: none;
+	display: inline-block;
+	max-width: 220px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.bg360-app-card-info {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 13px;
+	color: var(--bg360-text-muted);
+	padding: 10px 0;
+	border-top: 1px solid var(--bg360-border);
+	border-bottom: 1px solid var(--bg360-border);
+}
+
+.bg360-app-card-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+/* MINI APP LIST */
+.bg360-mini-app-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.bg360-mini-app-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px;
+	border: 1px solid var(--bg360-border);
+	border-radius: 8px;
+}
+
+.bg360-mini-app-icon {
+	width: 38px;
+	height: 38px;
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #FFFFFF;
+	overflow: hidden;
+}
+
+.bg360-mini-app-icon img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.bg360-mini-app-meta {
+	flex: 1;
+	min-width: 0;
+}
+
+.bg360-mini-app-meta strong {
+	display: block;
+	font-size: 14px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.bg360-mini-app-meta code {
+	font-size: 11px;
+	color: #64748B;
+}
+
+/* -------------------------------------------------------------------------
+ * FORMS, INPUTS & BUTTONS
+ * ------------------------------------------------------------------------- */
+.bg360-form-row {
+	margin-bottom: 20px;
+}
+
+.bg360-form-row-2col {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+label {
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	color: #334155;
+	margin-bottom: 6px;
+}
+
+.bg360-required {
+	color: #EF4444;
+}
+
+.bg360-input, .bg360-select {
+	width: 100%;
+	padding: 10px 14px;
+	border: 1px solid var(--bg360-border);
+	border-radius: 8px;
+	font-size: 14px;
+	color: var(--bg360-text-main);
+	background: #FFFFFF;
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.bg360-input:focus, .bg360-select:focus {
+	outline: none;
+	border-color: var(--bg360-primary);
+	box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+.bg360-color-picker-input {
+	height: 42px;
+	width: 100%;
+	border: 1px solid var(--bg360-border);
+	border-radius: 8px;
+	cursor: pointer;
+	padding: 2px;
+	background: #fff;
+}
+
+.bg360-form-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 24px;
+}
+
+/* BUTTONS */
+.bg360-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 10px 18px;
+	font-size: 14px;
+	font-weight: 600;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	cursor: pointer;
+	text-decoration: none;
+	transition: all 0.2s;
+}
+
+.bg360-btn-primary {
+	background: var(--bg360-primary);
+	color: #FFFFFF;
+	border-color: var(--bg360-primary);
+}
+
+.bg360-btn-primary:hover {
+	background: var(--bg360-primary-hover);
+	border-color: var(--bg360-primary-hover);
+}
+
+.bg360-btn-secondary {
+	background: #FFFFFF;
+	color: #334155;
+	border-color: var(--bg360-border);
+}
+
+.bg360-btn-secondary:hover {
+	background: #F8FAFC;
+	border-color: #CBD5E1;
+}
+
+.bg360-btn-danger {
+	background: #FEE2E2;
+	color: #B91C1C;
+	border-color: #FCA5A5;
+}
+
+.bg360-btn-danger:hover {
+	background: #EF4444;
+	color: #FFFFFF;
+}
+
+.bg360-btn-small {
+	padding: 6px 12px;
+	font-size: 13px;
+	border-radius: 6px;
+}
+
+.bg360-btn-block {
+	width: 100%;
+}
+
+/* -------------------------------------------------------------------------
+ * TABLES & BADGES
+ * ------------------------------------------------------------------------- */
+.bg360-table-responsive {
+	overflow-x: auto;
+}
+
+.bg360-portal-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 14px;
+}
+
+.bg360-portal-table th {
+	background: #F8FAFC;
+	padding: 12px 16px;
+	text-align: left;
+	font-weight: 600;
+	color: #475569;
+	border-bottom: 1px solid var(--bg360-border);
+}
+
+.bg360-portal-table td {
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--bg360-border);
+	color: #334155;
+}
+
+.bg360-portal-table tr:last-child td {
+	border-bottom: none;
+}
+
+.bg360-badge {
+	display: inline-block;
+	padding: 3px 8px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: capitalize;
+}
+
+.bg360-badge-success { background: #DCFCE7; color: #15803D; }
+.bg360-badge-progress{ background: #DBEAFE; color: #1D4ED8; }
+.bg360-badge-failure { background: #FEE2E2; color: #B91C1C; }
+.bg360-badge-idle    { background: #F1F5F9; color: #475569; }
+
+/* -------------------------------------------------------------------------
+ * ACTIVE BUILD CARD & PROGRESS BAR
+ * ------------------------------------------------------------------------- */
+.bg360-header-active {
+	background: #F5F3FF;
+	border-bottom-color: #DDD6FE;
+}
+
+.bg360-progress-bar-container {
+	height: 10px;
+	background: #E2E8F0;
+	border-radius: 999px;
+	overflow: hidden;
+	margin: 16px 0;
+}
+
+.bg360-progress-bar-fill {
+	height: 100%;
+	width: 100%;
+	background: linear-gradient(90deg, #7C3AED, #3B82F6, #7C3AED);
+	background-size: 200% 100%;
+	animation: bg360Stripes 2s infinite linear;
+	border-radius: 999px;
+}
+
+@keyframes bg360Stripes {
+	0% { background-position: 100% 0; }
+	100% { background-position: -100% 0; }
+}
+
+.bg360-artifact-buttons {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-top: 12px;
+}
+
+/* -------------------------------------------------------------------------
+ * NOTICES & ALERTS
+ * ------------------------------------------------------------------------- */
+.bg360-alert {
+	padding: 14px 18px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 500;
+	margin-bottom: 20px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.bg360-alert-success { background: #DCFCE7; color: #15803D; border: 1px solid #86EFAC; }
+.bg360-alert-error   { background: #FEE2E2; color: #B91C1C; border: 1px solid #FCA5A5; }
+.bg360-alert-info    { background: #DBEAFE; color: #1D4ED8; border: 1px solid #93C5FD; }
+
+/* EMPTY STATE */
+.bg360-empty-state {
+	text-align: center;
+	padding: 48px 24px;
+	color: #64748B;
+}
+
+.bg360-empty-state .dashicons {
+	font-size: 48px;
+	width: 48px;
+	height: 48px;
+	color: #CBD5E1;
+	margin-bottom: 12px;
+}
+
+/* -------------------------------------------------------------------------
+ * RESPONSIVENESS
+ * ------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+	.bg360-portal-grid-2col {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 768px) {
+	.bg360-portal-sidebar {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: -260px;
+		transition: left 0.3s ease;
+	}
+
+	.bg360-portal-sidebar.open {
+		left: 0;
+	}
+
+	.bg360-mobile-menu-toggle {
+		display: block;
+	}
+
+	.bg360-portal-header {
+		padding: 0 16px;
+	}
+
+	.bg360-portal-content-body {
+		padding: 16px;
+	}
+
+	.bg360-form-row-2col {
+		grid-template-columns: 1fr;
+	}
+}

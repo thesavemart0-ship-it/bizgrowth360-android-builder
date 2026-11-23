@@ -27,6 +27,7 @@
 		initBuildCenter();
 		initNativeFeatures();
 		initIOSSettings();
+		initSaasPlatform();
 
 		// Initial check on load
 		loadActiveBuildOrHistory();
@@ -48,6 +49,8 @@
 
 			if (target === 'tab-monitor') {
 				loadHistory(1);
+			} else if (target === 'tab-saas') {
+				loadSaasPlatformData();
 			}
 		});
 	}
@@ -935,8 +938,13 @@
 			var statusEl = $('#bg360-features-save-status');
 			var originalHtml = '<span class="dashicons dashicons-saved"></span> Save Native Features Settings';
 
-			btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 8px 0 0;visibility:visible;"></span> Saving Features...');
-			statusEl.html('<span style="color:#64748B;font-weight:600;"><span class="dashicons dashicons-update spin" style="vertical-align:middle;margin-right:4px;"></span> Saving to database...</span>').show();
+			// Immediate visual feedback
+			btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 8px 0 0;visibility:visible;"></span> Saving Features...').css({
+				'background-color': '#2563EB',
+				'border-color': '#1D4ED8',
+				'color': '#ffffff'
+			});
+			statusEl.html('<span style="display:inline-flex;align-items:center;gap:6px;color:#2563EB;font-weight:600;font-size:13px;"><span class="dashicons dashicons-update spin"></span> Saving settings to database...</span>').show();
 
 			var formArray = $('#bg360-native-features-form').serializeArray();
 			var features = {
@@ -1094,6 +1102,156 @@
 					.addClass('bg360-chip-' + status)
 					.text(status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' '));
 			}
+		});
+	}
+
+	/**
+	 * Super Admin SaaS Multi-Tenant Management
+	 */
+	function initSaasPlatform() {
+		$('#bg360-saas-search').on('input', debounce(function () {
+			loadSaasPlatformData();
+		}, 400));
+
+		$('#bg360-saas-status-filter').on('change', function () {
+			loadSaasPlatformData();
+		});
+
+		$('#bg360-toggle-registration').on('change', function () {
+			var enabled = $(this).is(':checked') ? 1 : 0;
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_saas_toggle_registration',
+				nonce: bizgrowth360AppBuilder.nonce,
+				enabled: enabled
+			}, function (res) {
+				if (res.success) {
+					showToast(res.data.message, 'success');
+				}
+			});
+		});
+
+		// Suspend / Reactivate Workspace
+		$(document).on('click', '.bg360-saas-status-btn', function () {
+			var wsId = $(this).data('ws-id');
+			var newStatus = $(this).data('new-status');
+			var btn = $(this);
+
+			btn.prop('disabled', true);
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_saas_update_status',
+				nonce: bizgrowth360AppBuilder.nonce,
+				workspace_id: wsId,
+				status: newStatus
+			}, function (res) {
+				if (res.success) {
+					showToast(res.data.message, 'success');
+					loadSaasPlatformData();
+				} else {
+					showToast(res.data.message, 'error');
+					btn.prop('disabled', false);
+				}
+			});
+		});
+
+		// Change Plan
+		$(document).on('change', '.bg360-saas-plan-select', function () {
+			var wsId = $(this).data('ws-id');
+			var planId = $(this).val();
+
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_saas_change_plan',
+				nonce: bizgrowth360AppBuilder.nonce,
+				workspace_id: wsId,
+				plan_id: planId
+			}, function (res) {
+				if (res.success) {
+					showToast(res.data.message, 'success');
+				} else {
+					showToast(res.data.message, 'error');
+				}
+			});
+		});
+
+		// Delete Workspace
+		$(document).on('click', '.bg360-saas-delete-btn', function () {
+			var wsId = $(this).data('ws-id');
+			if (!confirm('Are you sure you want to permanently delete this customer workspace? All tenant apps and usage will be removed.')) return;
+
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_saas_delete_workspace',
+				nonce: bizgrowth360AppBuilder.nonce,
+				workspace_id: wsId
+			}, function (res) {
+				if (res.success) {
+					showToast(res.data.message, 'success');
+					loadSaasPlatformData();
+				} else {
+					showToast(res.data.message, 'error');
+				}
+			});
+		});
+	}
+
+	function loadSaasPlatformData(page) {
+		page = page || 1;
+		var search = $('#bg360-saas-search').val() || '';
+		var status = $('#bg360-saas-status-filter').val() || '';
+
+		$.post(bizgrowth360AppBuilder.ajax_url, {
+			action: 'bizgrowth360_saas_get_workspaces',
+			nonce: bizgrowth360AppBuilder.nonce,
+			page: page,
+			search: search,
+			status: status
+		}, function (res) {
+			if (res.success) {
+				var m = res.data.metrics;
+				$('#saas-total-customers').text(m.total_customers);
+				$('#saas-active-customers').text(m.active_customers);
+				$('#saas-suspended-customers').text(m.suspended_customers);
+				$('#saas-total-apps').text(m.total_apps);
+
+				renderSaasWorkspacesTable(res.data.results.items, res.data.plans);
+			}
+		});
+	}
+
+	function renderSaasWorkspacesTable(items, plans) {
+		var tbody = $('#bg360-saas-workspaces-body');
+		tbody.empty();
+
+		if (!items || items.length === 0) {
+			tbody.html('<tr><td colspan="7" style="text-align:center; padding: 20px; color:#64748B;">No tenant workspaces match the selected criteria.</td></tr>');
+			return;
+		}
+
+		items.forEach(function (w) {
+			var statusClass = w.status === 'active' ? 'background:#DCFCE7;color:#166534;' : 'background:#FEE2E2;color:#991B1B;';
+			var statusActionBtn = w.status === 'active'
+				? '<button type="button" class="button button-small bg360-saas-status-btn" data-ws-id="' + w.id + '" data-new-status="suspended" style="color:#B91C1C;"><span class="dashicons dashicons-lock"></span> Suspend</button>'
+				: '<button type="button" class="button button-small bg360-saas-status-btn" data-ws-id="' + w.id + '" data-new-status="active" style="color:#15803D;"><span class="dashicons dashicons-unlock"></span> Reactivate</button>';
+
+			var planSelectOptions = (plans || []).map(function (p) {
+				var selected = parseInt(p.id, 10) === parseInt(w.plan_id, 10) ? ' selected' : '';
+				return '<option value="' + p.id + '"' + selected + '>' + escapeHtml(p.name) + '</option>';
+			}).join('');
+
+			var planSelect = '<select class="bg360-saas-plan-select" data-ws-id="' + w.id + '" style="font-size:12px; height:28px;">' + planSelectOptions + '</select>';
+
+			var deleteBtn = parseInt(w.id, 10) === 1 ? '' : '<button type="button" class="button button-small bg360-saas-delete-btn" data-ws-id="' + w.id + '" style="color:#B91C1C;" title="Delete Workspace"><span class="dashicons dashicons-trash"></span></button>';
+
+			var row = $(
+				'<tr>' +
+				'  <td><code>#' + w.id + '</code></td>' +
+				'  <td><strong>' + escapeHtml(w.name) + '</strong>' + (w.business_name ? '<br><small style="color:#64748B;">' + escapeHtml(w.business_name) + '</small>' : '') + '</td>' +
+				'  <td>' + escapeHtml(w.user_email || '-') + '</td>' +
+				'  <td>' + planSelect + '</td>' +
+				'  <td><span class="bg360-badge" style="' + statusClass + '">' + escapeHtml(w.status.toUpperCase()) + '</span></td>' +
+				'  <td>' + escapeHtml(w.created_at) + '</td>' +
+				'  <td><div style="display:flex;gap:6px;align-items:center;">' + statusActionBtn + deleteBtn + '</div></td>' +
+				'</tr>'
+			);
+			tbody.append(row);
 		});
 	}
 

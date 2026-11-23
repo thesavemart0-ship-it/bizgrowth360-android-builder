@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class BuildDb {
 
 	const TABLE_NAME = 'bg360_builds';
-	const DB_VERSION = '1.1.0';
+	const DB_VERSION = '1.2.0';
 	const DB_VERSION_OPTION = 'bizgrowth360_build_db_version';
 
 	/**
@@ -42,6 +42,7 @@ class BuildDb {
 			parent_build_id varchar(64) DEFAULT NULL,
 			app_name varchar(255) NOT NULL,
 			package_id varchar(255) NOT NULL,
+			tenant_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			platform varchar(16) NOT NULL DEFAULT 'android',
 			ios_bundle_id varchar(255) DEFAULT NULL,
 			ios_export_method varchar(20) DEFAULT NULL,
@@ -71,11 +72,15 @@ class BuildDb {
 			KEY run_id (run_id),
 			KEY app_name (app_name(191)),
 			KEY package_id (package_id(191)),
+			KEY tenant_id (tenant_id),
 			KEY created_at (created_at)
 		) $charset_collate;";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
+
+		// Non-destructive backfill for existing single-workspace builds.
+		$wpdb->query( "UPDATE {$table_name} SET tenant_id = created_by WHERE tenant_id = 0 AND created_by > 0" );
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 	}
@@ -91,9 +96,12 @@ class BuildDb {
 
 		$defaults = array(
 			'build_id'         => 'bg360_bld_' . wp_generate_password( 12, false, false ),
+			'workspace_id'     => 1,
+			'app_id'           => null,
 			'parent_build_id'  => null,
 			'app_name'         => '',
 			'package_id'       => '',
+			'tenant_id'        => get_current_user_id(),
 			'platform'         => 'android',
 			'ios_bundle_id'    => '',
 			'ios_export_method' => '',
@@ -131,9 +139,12 @@ class BuildDb {
 			$record,
 			array(
 				'%s', // build_id
+				'%d', // workspace_id
+				'%d', // app_id
 				'%s', // parent_build_id
 				'%s', // app_name
 				'%s', // package_id
+				'%d', // tenant_id
 				'%s', // platform
 				'%s', // ios_bundle_id
 				'%s', // ios_export_method
@@ -193,13 +204,19 @@ class BuildDb {
 	 * @param string $build_id
 	 * @return object|null
 	 */
-	public static function get_build( $build_id ) {
+	public static function get_build( $build_id, $workspace_id = null ) {
 		global $wpdb;
 		$table = self::get_table_name();
 
-		$row = $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE build_id = %s LIMIT 1", $build_id )
-		);
+		if ( null !== $workspace_id ) {
+			$row = $wpdb->get_row(
+				$wpdb->prepare( "SELECT * FROM {$table} WHERE build_id = %s AND workspace_id = %d LIMIT 1", $build_id, $workspace_id )
+			);
+		} else {
+			$row = $wpdb->get_row(
+				$wpdb->prepare( "SELECT * FROM {$table} WHERE build_id = %s LIMIT 1", $build_id )
+			);
+		}
 
 		return self::format_row( $row );
 	}
@@ -224,17 +241,30 @@ class BuildDb {
 	/**
 	 * Get the currently active build (queued or running).
 	 *
+	 * @param int|null $workspace_id
 	 * @return object|null
 	 */
-	public static function get_active_build() {
+	public static function get_active_build( $workspace_id = null ) {
 		global $wpdb;
 		$table = self::get_table_name();
 
-		$row = $wpdb->get_row(
-			"SELECT * FROM {$table} 
-			 WHERE status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'exporting', 'uploading', 'in_progress')
-			 ORDER BY id DESC LIMIT 1"
-		);
+		if ( null !== $workspace_id ) {
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} 
+					 WHERE status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'exporting', 'uploading', 'in_progress')
+					 AND workspace_id = %d
+					 ORDER BY id DESC LIMIT 1",
+					$workspace_id
+				)
+			);
+		} else {
+			$row = $wpdb->get_row(
+				"SELECT * FROM {$table} 
+				 WHERE status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'exporting', 'uploading', 'in_progress')
+				 ORDER BY id DESC LIMIT 1"
+			);
+		}
 
 		return self::format_row( $row );
 	}
@@ -250,20 +280,32 @@ class BuildDb {
 		$table = self::get_table_name();
 
 		$defaults = array(
-			'search'     => '',
-			'status'     => '',
-			'build_type' => '',
-			'platform'   => '',
-			'page'       => 1,
-			'per_page'   => 10,
-			'orderby'    => 'id',
-			'order'      => 'DESC',
+			'workspace_id' => null,
+			'app_id'       => null,
+			'search'       => '',
+			'status'       => '',
+			'build_type'   => '',
+			'platform'     => '',
+			'page'         => 1,
+			'per_page'     => 10,
+			'orderby'      => 'id',
+			'order'        => 'DESC',
 		);
 
 		$r = wp_parse_args( $args, $defaults );
 
 		$where  = array( '1=1' );
 		$values = array();
+
+		if ( null !== $r['workspace_id'] && '' !== $r['workspace_id'] ) {
+			$where[]  = 'workspace_id = %d';
+			$values[] = absint( $r['workspace_id'] );
+		}
+
+		if ( null !== $r['app_id'] && '' !== $r['app_id'] ) {
+			$where[]  = 'app_id = %d';
+			$values[] = absint( $r['app_id'] );
+		}
 
 		if ( ! empty( $r['search'] ) ) {
 			$like = '%' . $wpdb->esc_like( $r['search'] ) . '%';

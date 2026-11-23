@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "validate": "node scripts/validate-config.js",
-    "test": "node --test tests/unit.test.js tests/ios.test.js",
+    "test": "node --test tests/unit.test.js tests/ios.test.js tests/saas-security.test.js",
     "test:ios": "node --test tests/ios.test.js",
     "test:validate": "node scripts/validate-config.js --test",
     "test:integration": "node --test tests/integration.test.js",

@@ -271,8 +271,33 @@ class AdminPage {
 	 * Handle secure artifact download proxy.
 	 */
 	public function handle_artifact_download() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'Unauthorized access.', 'bizgrowth360-app-builder' ), 403 );
+		$artifact_id = isset( $_GET['artifact_id'] ) ? absint( $_GET['artifact_id'] ) : 0;
+		$build_id    = isset( $_GET['build_id'] ) ? sanitize_text_field( wp_unslash( $_GET['build_id'] ) ) : '';
+		$type        = isset( $_GET['type'] ) ? sanitize_key( $_GET['type'] ) : '';
+
+		$has_access = false;
+		if ( current_user_can( 'manage_options' ) ) {
+			$has_access = true;
+		} elseif ( current_user_can( 'bg360_download_artifacts' ) ) {
+			if ( ! empty( $build_id ) ) {
+				$check = TenantManager::validate_build_access( $build_id );
+				if ( ! is_wp_error( $check ) ) {
+					$has_access = true;
+				}
+			} elseif ( ! empty( $artifact_id ) ) {
+				// Verify through the build containing this artifact
+				global $wpdb;
+				$table = BuildDb::table_name();
+				$found = $wpdb->get_row( $wpdb->prepare( "SELECT build_id FROM {$table} WHERE artifacts LIKE %s LIMIT 1", '%' . $wpdb->esc_like( (string) $artifact_id ) . '%' ) );
+				if ( $found && ! is_wp_error( TenantManager::validate_build_access( $found->build_id ) ) ) {
+					$has_access = true;
+					$build_id = $found->build_id;
+				}
+			}
+		}
+
+		if ( ! $has_access ) {
+			wp_die( esc_html__( 'Unauthorized access to build artifact.', 'bizgrowth360-app-builder' ), 403 );
 		}
 
 		check_admin_referer( 'bizgrowth360_download_artifact' );
@@ -384,6 +409,9 @@ class AdminPage {
 				</a>
 				<a href="#tab-monitor" class="nav-tab" data-tab="tab-monitor">
 					<span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Build Center & Downloads', 'bizgrowth360-app-builder' ); ?>
+				</a>
+				<a href="#tab-saas" class="nav-tab" data-tab="tab-saas">
+					<span class="dashicons dashicons-groups"></span> <?php esc_html_e( 'SaaS Multi-Tenant Platform', 'bizgrowth360-app-builder' ); ?>
 				</a>
 			</h2>
 
@@ -837,6 +865,8 @@ class AdminPage {
 					</div>
 				</div>
 			</div>
+
+			<?php $this->render_saas_platform(); ?>
 
 			<!-- MODAL 1: Build Confirmation Summary -->
 			<div id="bg360-confirm-modal" class="bg360-modal-overlay" style="display:none;">
@@ -1419,11 +1449,11 @@ class AdminPage {
 				</div>
 
 				<!-- Save Action Bar -->
-				<div class="bizgrowth360-features-footer">
-					<button type="button" class="button button-primary bg360-btn-large" id="bg360-save-features-btn">
+				<div class="bizgrowth360-features-footer" style="display:flex; align-items:center; gap:16px; margin-top:24px; padding:16px; background:#ffffff; border:1px solid #E2E8F0; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+					<button type="button" class="button button-primary bg360-btn-large" id="bg360-save-features-btn" style="min-width:260px; height:42px; font-size:14px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; gap:8px;">
 						<span class="dashicons dashicons-saved"></span> <?php esc_html_e( 'Save Native Features Settings', 'bizgrowth360-app-builder' ); ?>
 					</button>
-					<span class="bg360-save-status" id="bg360-features-save-status"></span>
+					<span class="bg360-save-status" id="bg360-features-save-status" style="display:none;"></span>
 				</div>
 			</form>
 
@@ -1477,6 +1507,97 @@ class AdminPage {
 						</a>
 						<button type="button" class="button" data-close="#bg360-assetlinks-modal"><?php esc_html_e( 'Close', 'bizgrowth360-app-builder' ); ?></button>
 					</div>
+				</div>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render TAB 5: SaaS Multi-Tenant Platform & Workspaces.
+	 */
+	public function render_saas_platform() {
+		?>
+		<div id="tab-saas" class="bizgrowth360-tab-content">
+			<!-- Platform Metrics Header -->
+			<div class="bg360-metric-grid" id="bg360-saas-metrics-zone" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
+					<span style="font-size:12px; color:#64748B; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Total SaaS Tenants', 'bizgrowth360-app-builder' ); ?></span>
+					<h2 id="saas-total-customers" style="margin:8px 0 0; font-size:26px; color:#0F172A;">-</h2>
+				</div>
+				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
+					<span style="font-size:12px; color:#15803D; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Active Workspaces', 'bizgrowth360-app-builder' ); ?></span>
+					<h2 id="saas-active-customers" style="margin:8px 0 0; font-size:26px; color:#15803D;">-</h2>
+				</div>
+				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
+					<span style="font-size:12px; color:#B91C1C; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Suspended', 'bizgrowth360-app-builder' ); ?></span>
+					<h2 id="saas-suspended-customers" style="margin:8px 0 0; font-size:26px; color:#B91C1C;">-</h2>
+				</div>
+				<div class="bizgrowth360-card" style="margin:0; padding:18px;">
+					<span style="font-size:12px; color:#1D4ED8; font-weight:600; text-transform:uppercase;"><?php esc_html_e( 'Total Customer Apps', 'bizgrowth360-app-builder' ); ?></span>
+					<h2 id="saas-total-apps" style="margin:8px 0 0; font-size:26px; color:#1D4ED8;">-</h2>
+				</div>
+			</div>
+
+			<!-- SaaS Platform Settings Bar -->
+			<div class="bizgrowth360-card" style="margin-bottom: 24px;">
+				<div class="bizgrowth360-card-header-flex">
+					<div>
+						<h3><span class="dashicons dashicons-admin-settings"></span> <?php esc_html_e( 'Platform Access & Customer Portal Link', 'bizgrowth360-app-builder' ); ?></h3>
+						<p class="description"><?php esc_html_e( 'Control public customer registration and access your white-label customer portal.', 'bizgrowth360-app-builder' ); ?></p>
+					</div>
+					<div>
+						<a href="<?php echo esc_url( home_url( '/app-portal/' ) ); ?>" target="_blank" class="button button-primary">
+							<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'Open Customer Portal', 'bizgrowth360-app-builder' ); ?>
+						</a>
+					</div>
+				</div>
+				<div style="padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--bg360-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+						<input type="checkbox" id="bg360-toggle-registration" value="1" <?php checked( SaasAuth::is_registration_enabled() ); ?> />
+						<strong><?php esc_html_e( 'Allow Public Customer Registration', 'bizgrowth360-app-builder' ); ?></strong>
+					</label>
+					<span class="description"><?php esc_html_e( 'Customer Portal Shortcode:', 'bizgrowth360-app-builder' ); ?> <code>[bizgrowth360_customer_portal]</code></span>
+				</div>
+			</div>
+
+			<!-- Tenant Workspaces Table -->
+			<div class="bizgrowth360-card">
+				<div class="bizgrowth360-card-header-flex">
+					<div>
+						<h3><span class="dashicons dashicons-networking"></span> <?php esc_html_e( 'Tenant Workspaces & Customer Management', 'bizgrowth360-app-builder' ); ?></h3>
+						<p class="description"><?php esc_html_e( 'Review all registered tenants, manage subscription plans, enforce quotas, or suspend/reactivate customer workspaces.', 'bizgrowth360-app-builder' ); ?></p>
+					</div>
+					<div class="bg360-filter-controls">
+						<input type="search" id="bg360-saas-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search workspace or email...', 'bizgrowth360-app-builder' ); ?>" style="max-width:240px;" />
+						<select id="bg360-saas-status-filter">
+							<option value=""><?php esc_html_e( 'All Statuses', 'bizgrowth360-app-builder' ); ?></option>
+							<option value="active"><?php esc_html_e( 'Active', 'bizgrowth360-app-builder' ); ?></option>
+							<option value="suspended"><?php esc_html_e( 'Suspended', 'bizgrowth360-app-builder' ); ?></option>
+						</select>
+					</div>
+				</div>
+
+				<div class="bg360-table-wrapper" style="margin-top: 16px;">
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th style="width: 50px;"><?php esc_html_e( 'ID', 'bizgrowth360-app-builder' ); ?></th>
+								<th><?php esc_html_e( 'Workspace / Business', 'bizgrowth360-app-builder' ); ?></th>
+								<th><?php esc_html_e( 'Customer Email', 'bizgrowth360-app-builder' ); ?></th>
+								<th><?php esc_html_e( 'Current Plan', 'bizgrowth360-app-builder' ); ?></th>
+								<th><?php esc_html_e( 'Status', 'bizgrowth360-app-builder' ); ?></th>
+								<th><?php esc_html_e( 'Registered', 'bizgrowth360-app-builder' ); ?></th>
+								<th style="width: 260px;"><?php esc_html_e( 'Actions', 'bizgrowth360-app-builder' ); ?></th>
+							</tr>
+						</thead>
+						<tbody id="bg360-saas-workspaces-body">
+							<tr><td colspan="7" style="text-align:center; padding: 20px;"><?php esc_html_e( 'Loading tenant workspaces...', 'bizgrowth360-app-builder' ); ?></td></tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="bg360-pagination" id="bg360-saas-pagination" style="display: none; padding: 12px 0;">
+					<span id="bg360-saas-count"></span>
 				</div>
 			</div>
 		</div>

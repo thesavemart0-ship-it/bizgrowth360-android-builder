@@ -17,7 +17,7 @@ async function deployAndConfigure() {
     console.log('Connecting to Hostinger FTP/FTPS...');
     try {
         await client.access({
-            host: process.env.FTP_HOST,
+            host: process.env.FTP_HOST.replace(/^ftp:\/\//, ''),
             user: process.env.FTP_USER,
             password: process.env.FTP_PASSWORD,
             port: parseInt(process.env.FTP_PORT || '21', 10),

@@ -40,6 +40,13 @@ class AjaxHandler {
 		add_action( 'wp_ajax_bizgrowth360_get_native_features', array( $this, 'ajax_get_native_features' ) );
 		add_action( 'wp_ajax_bizgrowth360_send_test_push', array( $this, 'ajax_send_test_push' ) );
 		add_action( 'wp_ajax_bizgrowth360_generate_assetlinks', array( $this, 'ajax_generate_assetlinks' ) );
+
+		// SaaS Super Admin Actions
+		add_action( 'wp_ajax_bizgrowth360_saas_get_workspaces', array( $this, 'ajax_saas_get_workspaces' ) );
+		add_action( 'wp_ajax_bizgrowth360_saas_update_status', array( $this, 'ajax_saas_update_status' ) );
+		add_action( 'wp_ajax_bizgrowth360_saas_change_plan', array( $this, 'ajax_saas_change_plan' ) );
+		add_action( 'wp_ajax_bizgrowth360_saas_delete_workspace', array( $this, 'ajax_saas_delete_workspace' ) );
+		add_action( 'wp_ajax_bizgrowth360_saas_toggle_registration', array( $this, 'ajax_saas_toggle_registration' ) );
 	}
 
 	private function check_permissions() {
@@ -419,6 +426,110 @@ class AjaxHandler {
 			array(
 				'assetlinks_json' => $json,
 				'well_known_url'  => home_url( '/.well-known/assetlinks.json' ),
+			)
+		);
+	}
+
+	/* ------------------------------------------------------------------------
+	 * SaaS Super Admin Management Handlers
+	 * ------------------------------------------------------------------------ */
+
+	public function ajax_saas_get_workspaces() {
+		$this->check_permissions();
+
+		$page     = max( 1, absint( $_POST['page'] ?? 1 ) );
+		$per_page = max( 1, min( 50, absint( $_POST['per_page'] ?? 15 ) ) );
+		$search   = sanitize_text_field( wp_unslash( $_POST['search'] ?? '' ) );
+		$status   = sanitize_key( wp_unslash( $_POST['status'] ?? '' ) );
+
+		$results = SaasDb::get_all_workspaces(
+			array(
+				'page'     => $page,
+				'per_page' => $per_page,
+				'search'   => $search,
+				'status'   => $status,
+			)
+		);
+
+		$metrics = SaasDb::get_platform_metrics();
+		$plans   = SaasDb::get_all_plans();
+
+		wp_send_json_success(
+			array(
+				'results' => $results,
+				'metrics' => $metrics,
+				'plans'   => $plans,
+			)
+		);
+	}
+
+	public function ajax_saas_update_status() {
+		$this->check_permissions();
+
+		$workspace_id = absint( $_POST['workspace_id'] ?? 0 );
+		$status       = sanitize_key( $_POST['status'] ?? 'active' );
+
+		if ( ! in_array( $status, array( 'active', 'suspended', 'pending' ), true ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid status.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		if ( 1 === $workspace_id && 'suspended' === $status ) {
+			wp_send_json_error( array( 'message' => __( 'Cannot suspend platform super admin workspace.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		SaasDb::update_workspace( $workspace_id, array( 'status' => $status ) );
+		wp_send_json_success(
+			array(
+				'message'   => sprintf( __( 'Workspace status updated to %s.', 'bizgrowth360-app-builder' ), strtoupper( $status ) ),
+				'workspace' => SaasDb::get_workspace( $workspace_id ),
+			)
+		);
+	}
+
+	public function ajax_saas_change_plan() {
+		$this->check_permissions();
+
+		$workspace_id = absint( $_POST['workspace_id'] ?? 0 );
+		$plan_id      = absint( $_POST['plan_id'] ?? 1 );
+
+		$plan = SaasDb::get_plan( $plan_id );
+		if ( ! $plan ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid plan selected.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		SaasDb::update_workspace( $workspace_id, array( 'plan_id' => $plan_id ) );
+		wp_send_json_success(
+			array(
+				'message' => sprintf( __( 'Workspace subscription updated to %s.', 'bizgrowth360-app-builder' ), $plan->name ),
+			)
+		);
+	}
+
+	public function ajax_saas_delete_workspace() {
+		$this->check_permissions();
+
+		$workspace_id = absint( $_POST['workspace_id'] ?? 0 );
+		if ( 1 === $workspace_id ) {
+			wp_send_json_error( array( 'message' => __( 'Cannot delete the platform super admin workspace.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		global $wpdb;
+		$w_table = SaasDb::get_table_name( SaasDb::TABLE_WORKSPACES );
+		$wpdb->delete( $w_table, array( 'id' => $workspace_id ) );
+
+		wp_send_json_success( array( 'message' => __( 'Workspace deleted successfully.', 'bizgrowth360-app-builder' ) ) );
+	}
+
+	public function ajax_saas_toggle_registration() {
+		$this->check_permissions();
+
+		$enabled = ! empty( $_POST['enabled'] ) ? '1' : '0';
+		update_option( SaasAuth::OPTION_ALLOW_REGISTRATION, $enabled );
+
+		wp_send_json_success(
+			array(
+				'message' => '1' === $enabled ? __( 'Customer registration enabled.', 'bizgrowth360-app-builder' ) : __( 'Customer registration disabled.', 'bizgrowth360-app-builder' ),
+				'enabled' => '1' === $enabled,
 			)
 		);
 	}

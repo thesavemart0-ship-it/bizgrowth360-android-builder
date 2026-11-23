@@ -3,7 +3,7 @@
  * Plugin Name:       Bizgrowth360 App Builder
  * Plugin URI:        https://www.bizgrowth360.in
  * Description:       Build real Android APK/AAB and iOS IPA packages for your WordPress website directly from your admin dashboard using GitHub Actions.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Bizgrowth360
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BIZGROWTH360_APP_BUILDER_VERSION', '1.1.0' );
+define( 'BIZGROWTH360_APP_BUILDER_VERSION', '1.2.0' );
 define( 'BIZGROWTH360_APP_BUILDER_PATH', plugin_dir_path( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_URL', plugin_dir_url( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
@@ -28,6 +28,11 @@ define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-config.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-build-db.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-device-tokens-db.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-saas-db.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-saas-roles.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-saas-auth.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-tenant-manager.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-customer-portal.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-settings.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-design-config.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-native-features.php';
@@ -53,21 +58,29 @@ function bizgrowth360_app_builder_init() {
 	$admin_page->init();
 	$rest_api->init();
 
-	// Flush the /.well-known/* rules once per plugin version so Apple/Android
-	// domain verification works after an upgrade without manual permalink saves.
-	if ( get_option( 'bizgrowth360_rewrite_version' ) !== BIZGROWTH360_APP_BUILDER_VERSION ) {
-		$rest_api->register_well_known_rewrite();
-		flush_rewrite_rules( false );
-		update_option( 'bizgrowth360_rewrite_version', BIZGROWTH360_APP_BUILDER_VERSION );
-	}
+	// SaaS Platform Services
+	\Bizgrowth360\AppBuilder\SaasRoles::init();
+	\Bizgrowth360\AppBuilder\SaasAuth::init();
+	\Bizgrowth360\AppBuilder\CustomerPortal::init();
+
+	// Flush the /.well-known/* rules and /app-portal once per plugin version on init action
+	add_action( 'init', function() {
+		if ( get_option( 'bizgrowth360_rewrite_version' ) !== BIZGROWTH360_APP_BUILDER_VERSION ) {
+			flush_rewrite_rules( false );
+			update_option( 'bizgrowth360_rewrite_version', BIZGROWTH360_APP_BUILDER_VERSION );
+		}
+	}, 99 );
 
 	// Ensure DB tables exist
-	if ( is_admin() ) {
+	if ( is_admin() || \Bizgrowth360\AppBuilder\CustomerPortal::is_portal_request() ) {
 		if ( get_option( \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION ) {
 			\Bizgrowth360\AppBuilder\BuildDb::install_table();
 		}
 		if ( get_option( \Bizgrowth360\AppBuilder\DeviceTokensDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\DeviceTokensDb::DB_VERSION ) {
 			\Bizgrowth360\AppBuilder\DeviceTokensDb::install_table();
+		}
+		if ( get_option( \Bizgrowth360\AppBuilder\SaasDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\SaasDb::DB_VERSION ) {
+			\Bizgrowth360\AppBuilder\SaasDb::install_tables();
 		}
 	}
 }
@@ -81,11 +94,12 @@ function bizgrowth360_app_builder_activate() {
 	$settings->set_defaults();
 	\Bizgrowth360\AppBuilder\BuildDb::install_table();
 	\Bizgrowth360\AppBuilder\DeviceTokensDb::install_table();
+	\Bizgrowth360\AppBuilder\SaasRoles::register_roles();
+	\Bizgrowth360\AppBuilder\SaasDb::install_tables();
 
-	// Register the /.well-known/* rewrite rules before flushing so Apple and
-	// Android domain verification work immediately after activation.
 	$rest_api = new \Bizgrowth360\AppBuilder\RestApi();
 	$rest_api->register_well_known_rewrite();
+	\Bizgrowth360\AppBuilder\CustomerPortal::add_rewrite_rules();
 	flush_rewrite_rules();
 }
 register_activation_hook( __FILE__, 'bizgrowth360_app_builder_activate' );
