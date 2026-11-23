@@ -91,7 +91,7 @@ function validateIpa(ipaPath, expected = {}) {
   }
 
   const appPrefix = appInfoEntry ? appInfoEntry.replace(/\/Info\.plist$/, '') : null;
-  const appName = appPrefix ? appPrefix.split('/')[1] : null;
+  const appName = appPrefix ? path.basename(appPrefix).replace(/\.app$/, '') : null;
 
   if (appPrefix && !names.includes(`${appPrefix}/${appName}`)) {
     errors.push('IPA is missing the application executable.');

@@ -1,8 +1,10 @@
-# Bizgrowth360 Android Build Engine (Phase 3)
+# Bizgrowth360 Cross-Platform App Build Engine
 
-A configuration-driven Android build engine that turns one reusable **Capacitor + Gradle** template into independent, signed Android applications. It runs locally or in **GitHub Actions** and produces real **APK** and **AAB** packages.
+A configuration-driven build engine that turns one reusable **Capacitor** template into independent Android and iOS applications. It runs locally or in **GitHub Actions** and produces real **APK**, **AAB** and (with Apple signing) **iOS IPA** packages.
 
-This phase extends the existing Phase 2 engine. It does **not** rebuild the template, does not touch signing, and does not implement WordPress integration yet.
+Android builds use Gradle on `ubuntu-latest`. iOS builds use Xcode and CocoaPods on a macOS runner. Both share the same app configuration, Design Studio, native features, build history and WordPress integration.
+
+See [docs/BUILD.md](docs/BUILD.md), [docs/ASSETS.md](docs/ASSETS.md), [docs/NATIVE_FEATURES.md](docs/NATIVE_FEATURES.md) and [docs/IOS_BUILD.md](docs/IOS_BUILD.md).
 
 ---
 
@@ -50,6 +52,21 @@ Artifacts are named dynamically, for example:
 - `Mahankali-Store-1.0.0-AAB`
 
 See [docs/BUILD.md](docs/BUILD.md) and [docs/ASSETS.md](docs/ASSETS.md).
+
+### iOS (GitHub Actions)
+
+**Actions** → **Bizgrowth360 iOS Dynamic Build** → **Run workflow**.
+
+Use `ios_mode=validation` to compile the generated Xcode project for the iOS
+Simulator without signing. Use `ios_mode=ipa` only after configuring the Apple
+signing secrets listed in [docs/IOS_BUILD.md](docs/IOS_BUILD.md). TestFlight
+upload requires both `upload_to_testflight=true` and
+`confirm_app_store_upload=true`; the workflow never submits an App Store
+release.
+
+iOS artifacts are named dynamically, for example:
+
+- `Mahankali-Store-1.0.0-app-store.ipa`
 
 ### Local
 

@@ -209,9 +209,14 @@ Example Response:
   "min_version_code": 1,
   "changelog": "Added push notifications and faster checkout.",
   "play_store_url": "https://play.google.com/store/apps/details?id=in.bizgrowth360.demoapp",
-  "direct_apk_url": "https://example.com/downloads/app-v1.1.0.apk"
+  "direct_apk_url": "https://example.com/downloads/app-v1.1.0.apk",
+  "app_store_url": "https://apps.apple.com/app/id0000000000",
+  "platform": "ios"
 }
 ```
+
+The endpoint also accepts `platform=android|ios`. iOS clients use
+`app_store_url`; Android clients use `play_store_url` or `direct_apk_url`.
 
 ### Update Policies
 - **Recommended**: Displays a non-blocking banner or dialog that the user can dismiss to continue browsing.
@@ -232,3 +237,29 @@ Example Response:
 | WordPress Admin Dashboard UI | **Verified** | Live deployed to `wordpress.townconnectai.com` with real-time status chips and action modals. |
 | Real FCM Push Delivery | **Ready** | Server-side dispatcher implemented; requires external Firebase Server Key and live Android device to receive. |
 | Real Android Keystore Signing | **Ready** | Secrets-driven CI/CD architecture verified; requires user's Google Play keystore. |
+
+---
+
+## 9. iOS Compatibility (Phase 7)
+
+The same Native Features configuration is applied to the generated iOS project:
+
+- **Push notifications** — `@capacitor/push-notifications`; `aps-environment`
+  entitlement and `remote-notification` background mode. Requires the Push
+  Notifications capability in the provisioning profile. APNs tokens are stored
+  with `platform=ios` and are not sent through FCM.
+- **Deep links** — custom URL schemes are written to `CFBundleURLTypes`; Universal
+  Links use the Associated Domains entitlement plus the dynamic
+  `/.well-known/apple-app-site-association` endpoint.
+- **Native share** — `@capacitor/share` on iOS.
+- **Camera / gallery / file upload** — `NSCameraUsageDescription`,
+  `NSPhotoLibraryUsageDescription` and `NSPhotoLibraryAddUsageDescription`.
+- **Geolocation** — `@capacitor/geolocation` plus
+  `NSLocationWhenInUseUsageDescription`.
+- **Offline handling** — bridge online/offline events and the branded offline
+  screen; no iOS plist entry required.
+- **In-app updates** — the bridge opens `app_updates.app_store_url` on iOS.
+- **Permissions** — Capacitor plugins trigger the native iOS permission prompts.
+
+See [IOS_BUILD.md](IOS_BUILD.md) for signing, IPA export, TestFlight and
+troubleshooting.

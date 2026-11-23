@@ -126,7 +126,7 @@ class Settings {
 
 			// Build targets
 			'platform'             => 'android',
-			'build_type'           => 'both',
+			'build_type'           => 'release',
 			'build_target'         => 'both',
 
 			// iOS / Apple
@@ -209,7 +209,7 @@ class Settings {
 		$sanitized['app_icon']             = esc_url_raw( $input['app_icon'] ?? '' );
 		$sanitized['splash_image']         = esc_url_raw( $input['splash_image'] ?? '' );
 
-		$sanitized['build_type']           = in_array( $input['build_type'] ?? 'both', array( 'both', 'release', 'debug' ), true ) ? $input['build_type'] : 'both';
+		$sanitized['build_type']           = in_array( $input['build_type'] ?? 'release', array( 'release', 'debug' ), true ) ? $input['build_type'] : 'release';
 		$sanitized['build_target']         = in_array( $input['build_target'] ?? 'both', array( 'both', 'apk', 'aab' ), true ) ? $input['build_target'] : 'both';
 		$sanitized['platform']             = in_array( $input['platform'] ?? 'android', array( 'android', 'ios', 'both' ), true ) ? $input['platform'] : 'android';
 

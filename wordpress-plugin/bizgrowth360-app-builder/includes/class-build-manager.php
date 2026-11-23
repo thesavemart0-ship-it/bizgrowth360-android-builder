@@ -376,6 +376,12 @@ class BuildManager {
 
 		$build_type = 'ios' === $platform ? 'ipa' : $action;
 
+		$will_upload = 'ios' === $platform
+			&& ! empty( $config['ios_upload_testflight'] )
+			&& ! empty( $config['confirm_app_store_upload'] )
+			&& 'app-store' === $config['ios_export_method']
+			&& 'ipa' === $config['ios_mode'];
+
 		$db_data = array(
 			'build_id'              => $build_id,
 			'parent_build_id'       => $config['parent_build_id'] ?? null,
@@ -384,7 +390,7 @@ class BuildManager {
 			'platform'              => $platform,
 			'ios_bundle_id'         => $config['ios_bundle_id'] ?? '',
 			'ios_export_method'     => 'ios' === $platform ? $config['ios_export_method'] : '',
-			'ios_upload_testflight' => 'ios' === $platform && ! empty( $config['ios_upload_testflight'] ) ? 1 : 0,
+			'ios_upload_testflight' => $will_upload ? 1 : 0,
 			'website_url'           => $config['website_url'],
 			'version_name'          => $config['version_name'],
 			'version_code'          => $config['version_code'],
@@ -409,10 +415,7 @@ class BuildManager {
 		$features_json = wp_json_encode( $config['features'] ?? array() );
 
 		if ( 'ios' === $platform ) {
-			$upload = ! empty( $config['ios_upload_testflight'] )
-				&& ! empty( $config['confirm_app_store_upload'] )
-				&& 'app-store' === $config['ios_export_method']
-				&& 'ipa' === $config['ios_mode'];
+			$upload = $will_upload;
 
 			$dispatch_inputs = array(
 				'app_name'                 => (string) $config['app_name'],

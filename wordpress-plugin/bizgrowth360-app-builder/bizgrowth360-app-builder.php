@@ -53,6 +53,14 @@ function bizgrowth360_app_builder_init() {
 	$admin_page->init();
 	$rest_api->init();
 
+	// Flush the /.well-known/* rules once per plugin version so Apple/Android
+	// domain verification works after an upgrade without manual permalink saves.
+	if ( get_option( 'bizgrowth360_rewrite_version' ) !== BIZGROWTH360_APP_BUILDER_VERSION ) {
+		$rest_api->register_well_known_rewrite();
+		flush_rewrite_rules( false );
+		update_option( 'bizgrowth360_rewrite_version', BIZGROWTH360_APP_BUILDER_VERSION );
+	}
+
 	// Ensure DB tables exist
 	if ( is_admin() ) {
 		if ( get_option( \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION ) {

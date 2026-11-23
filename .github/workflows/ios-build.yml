@@ -260,7 +260,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | tr -d '"')
 
-          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q "Apple"; then
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -Eq "Apple|iPhone"; then
             echo "::error::No valid Apple code-signing identity was imported. Verify IOS_CERTIFICATE_BASE64 and its password."
             exit 1
           fi
@@ -394,8 +394,9 @@ jobs:
           if [ -f "${RUNNER_TEMP:-/nonexistent}/app-signing.keychain-db" ]; then
             security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
           fi
-          if [ -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_CONNECT_KEY_ID:-none}.p8" ]; then
-            rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_CONNECT_KEY_ID:-none}.p8"
+          rm -rf "$HOME/.appstoreconnect/private_keys"
+          if [ -n "${IOS_PROFILE_UUID:-}" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$IOS_PROFILE_UUID.mobileprovision"
           fi
           rm -f "$RUNNER_TEMP/signing-certificate.p12" "$RUNNER_TEMP/profile.mobileprovision" "$RUNNER_TEMP/profile.plist"
           echo "Temporary signing material removed."

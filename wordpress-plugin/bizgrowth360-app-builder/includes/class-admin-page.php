@@ -520,7 +520,6 @@ class AdminPage {
 											<select id="bg360_build_type" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[build_type]">
 												<option value="release" <?php selected( $options['build_type'], 'release' ); ?>><?php esc_html_e( 'Release (Optimized & Signed)', 'bizgrowth360-app-builder' ); ?></option>
 												<option value="debug" <?php selected( $options['build_type'], 'debug' ); ?>><?php esc_html_e( 'Debug (Development & Quick Testing)', 'bizgrowth360-app-builder' ); ?></option>
-												<option value="both" <?php selected( $options['build_type'], 'both' ); ?>><?php esc_html_e( 'Both (Release & Debug)', 'bizgrowth360-app-builder' ); ?></option>
 											</select>
 										</td>
 									</tr>
