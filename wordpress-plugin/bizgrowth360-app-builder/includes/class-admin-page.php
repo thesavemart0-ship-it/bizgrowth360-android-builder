@@ -103,6 +103,20 @@ class AdminPage {
 			)
 		);
 
+		wp_localize_script(
+			'bizgrowth360-admin-js',
+			'bizgrowth360NativeFeatures',
+			array(
+				'features'         => NativeFeatures::get_features(),
+				'status'           => NativeFeatures::get_features_with_status(),
+				'summary'          => NativeFeatures::get_status_summary(),
+				'tokens_count'     => DeviceTokensDb::count_tokens(),
+				'assetlinks_url'   => home_url( '/.well-known/assetlinks.json' ),
+				'update_url'       => home_url( '/wp-json/bizgrowth360/v1/app-update' ),
+				'register_dev_url' => home_url( '/wp-json/bizgrowth360/v1/register-device' ),
+			)
+		);
+
 		$design_config = new DesignConfig();
 		$app_options   = $this->settings->get_options();
 
@@ -345,6 +359,9 @@ class AdminPage {
 				<a href="#tab-design" class="nav-tab" data-tab="tab-design">
 					<span class="dashicons dashicons-art"></span> <?php esc_html_e( 'App Design Studio', 'bizgrowth360-app-builder' ); ?>
 				</a>
+				<a href="#tab-features" class="nav-tab" data-tab="tab-features">
+					<span class="dashicons dashicons-admin-plugins"></span> <?php esc_html_e( 'Native Features', 'bizgrowth360-app-builder' ); ?>
+				</a>
 				<a href="#tab-monitor" class="nav-tab" data-tab="tab-monitor">
 					<span class="dashicons dashicons-download"></span> <?php esc_html_e( 'Build Center & Downloads', 'bizgrowth360-app-builder' ); ?>
 				</a>
@@ -579,6 +596,7 @@ class AdminPage {
 			</form>
 
 			<?php $this->render_design_studio(); ?>
+			<?php $this->render_native_features(); ?>
 
 			<!-- TAB 2: Build Center & Downloads -->
 			<div id="tab-monitor" class="bizgrowth360-tab-content">
@@ -922,6 +940,411 @@ class AdminPage {
 				</div>
 
 				<div id="bg360-design-toast" class="bg360-design-toast" role="status" aria-live="polite"></div>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render Native Features tab panel and controls.
+	 */
+	public function render_native_features() {
+		$features     = NativeFeatures::get_features();
+		$statuses     = NativeFeatures::get_features_with_status();
+		$summary      = NativeFeatures::get_status_summary();
+		$tokens_count = DeviceTokensDb::count_tokens();
+		?>
+		<div id="tab-features" class="bizgrowth360-tab-content">
+			<!-- Dashboard Summary Bar -->
+			<div class="bizgrowth360-card bg360-features-dashboard">
+				<div class="bg360-features-header">
+					<div>
+						<h3><span class="dashicons dashicons-admin-plugins"></span> <?php esc_html_e( 'Native App Features Engine', 'bizgrowth360-app-builder' ); ?></h3>
+						<p class="description">
+							<?php esc_html_e( 'Transform your website into a full-featured Android application with push notifications, deep links, native share, file uploads, offline recovery, and runtime permission control.', 'bizgrowth360-app-builder' ); ?>
+						</p>
+					</div>
+					<div class="bg360-features-stats">
+						<span class="bg360-stat-pill">
+							<span class="dashicons dashicons-smartphone"></span>
+							<strong id="bg360-token-count-display"><?php echo absint( $tokens_count ); ?></strong> <?php esc_html_e( 'Registered Device(s)', 'bizgrowth360-app-builder' ); ?>
+						</span>
+					</div>
+				</div>
+
+				<div class="bg360-feature-chips-grid">
+					<?php
+					$feature_labels = array(
+						'push_notifications' => array( 'label' => __( 'Push Notifications', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-bell' ),
+						'deep_linking'       => array( 'label' => __( 'Deep Links (App Links)', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-admin-links' ),
+						'native_share'       => array( 'label' => __( 'Native Share', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-share' ),
+						'camera_upload'      => array( 'label' => __( 'Camera & File Upload', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-camera' ),
+						'offline_engine'     => array( 'label' => __( 'Offline Engine', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-cloud' ),
+						'permission_manager' => array( 'label' => __( 'Permission Manager', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-shield' ),
+						'app_updates'        => array( 'label' => __( 'App Update Manager', 'bizgrowth360-app-builder' ), 'icon' => 'dashicons-update' ),
+					);
+
+					foreach ( $feature_labels as $f_key => $f_info ) :
+						$f_status = $statuses[ $f_key ] ?? 'disabled';
+						$badge_class = 'bg360-chip-' . esc_attr( $f_status );
+						$status_label = ucfirst( str_replace( '_', ' ', $f_status ) );
+						?>
+						<div class="bg360-feature-chip" id="chip-<?php echo esc_attr( $f_key ); ?>">
+							<span class="dashicons <?php echo esc_attr( $f_info['icon'] ); ?>"></span>
+							<span class="bg360-chip-name"><?php echo esc_html( $f_info['label'] ); ?></span>
+							<span class="bg360-status-badge <?php echo esc_attr( $badge_class ); ?>"><?php echo esc_html( $status_label ); ?></span>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			</div>
+
+			<!-- Feature Settings Cards Grid -->
+			<form id="bg360-native-features-form">
+				<div class="bg360-features-cards-grid">
+					<!-- CARD 1: Push Notifications -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-bell bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'Push Notifications (FCM)', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Deliver real-time alerts and promotions directly to users’ Android devices using Firebase Cloud Messaging.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+							<label class="bg360-switch">
+								<input type="checkbox" id="feat_push_enabled" name="push_notifications[enabled]" value="1" <?php checked( ! empty( $features['push_notifications']['enabled'] ) ); ?> />
+								<span class="bg360-slider"></span>
+							</label>
+						</div>
+						<div class="bg360-feature-card-body" id="body_push_notifications">
+							<div class="bg360-form-row">
+								<label for="feat_push_channel_id"><?php esc_html_e( 'Notification Channel ID & Name', 'bizgrowth360-app-builder' ); ?></label>
+								<div class="bg360-input-group">
+									<input type="text" id="feat_push_channel_id" name="push_notifications[channel_id]" value="<?php echo esc_attr( $features['push_notifications']['channel_id'] ); ?>" placeholder="default_channel" class="regular-text" />
+									<input type="text" id="feat_push_channel_name" name="push_notifications[channel_name]" value="<?php echo esc_attr( $features['push_notifications']['channel_name'] ); ?>" placeholder="General Notifications" class="regular-text" />
+								</div>
+								<p class="description"><?php esc_html_e( 'Required for Android 8.0+ notification routing and categorisation.', 'bizgrowth360-app-builder' ); ?></p>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_push_server_key"><?php esc_html_e( 'Firebase Cloud Messaging Server Key / Service Credential', 'bizgrowth360-app-builder' ); ?></label>
+								<div class="bg360-password-wrapper">
+									<input type="password" id="feat_push_server_key" name="push_notifications[firebase_server_key]" value="<?php echo esc_attr( $features['push_notifications']['firebase_server_key'] ); ?>" class="large-text" placeholder="AIzaSy..." />
+									<button type="button" class="button button-secondary bg360-toggle-password" data-target="#feat_push_server_key"><span class="dashicons dashicons-visibility"></span></button>
+								</div>
+								<p class="description"><?php esc_html_e( 'Used securely on the server to dispatch test notifications. Never exposed in Android APK source code.', 'bizgrowth360-app-builder' ); ?></p>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_push_google_services"><?php esc_html_e( 'google-services.json (Firebase Android Config)', 'bizgrowth360-app-builder' ); ?></label>
+								<textarea id="feat_push_google_services" name="push_notifications[google_services_json]" rows="4" class="large-text code" placeholder='{"project_info": {"project_id": "my-firebase-app"}}'><?php echo esc_textarea( $features['push_notifications']['google_services_json'] ); ?></textarea>
+								<p class="description"><?php esc_html_e( 'Paste the contents of google-services.json downloaded from your Firebase Console. It will be bundled into the compiled Android project.', 'bizgrowth360-app-builder' ); ?></p>
+							</div>
+							<div class="bg360-card-actions">
+								<button type="button" class="button button-secondary" id="bg360-open-test-push-btn">
+									<span class="dashicons dashicons-testimonial"></span> <?php esc_html_e( 'Send Test Push Notification', 'bizgrowth360-app-builder' ); ?>
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- CARD 2: Deep Links & Android App Links -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-admin-links bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'Deep Links & Android App Links', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Allow links from emails, SMS, or social media to open directly inside your installed app without disambiguation prompts.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+							<label class="bg360-switch">
+								<input type="checkbox" id="feat_deep_enabled" name="deep_linking[enabled]" value="1" <?php checked( ! empty( $features['deep_linking']['enabled'] ) ); ?> />
+								<span class="bg360-slider"></span>
+							</label>
+						</div>
+						<div class="bg360-feature-card-body" id="body_deep_linking">
+							<div class="bg360-form-row">
+								<label for="feat_deep_domain"><?php esc_html_e( 'Associated Domain (HTTPS Host)', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_deep_domain" name="deep_linking[domain]" value="<?php echo esc_attr( $features['deep_linking']['domain'] ); ?>" class="regular-text" placeholder="example.com" />
+								<p class="description"><?php esc_html_e( 'Links targeting https://<domain> will open in the app.', 'bizgrowth360-app-builder' ); ?></p>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_deep_scheme"><?php esc_html_e( 'Custom URI Scheme', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_deep_scheme" name="deep_linking[scheme]" value="<?php echo esc_attr( $features['deep_linking']['scheme'] ); ?>" class="regular-text" placeholder="bizgrowth360" />
+								<p class="description"><?php esc_html_e( 'Custom URL scheme (e.g., bizgrowth360://path) for direct internal navigation.', 'bizgrowth360-app-builder' ); ?></p>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_deep_sha256"><?php esc_html_e( 'SHA-256 Certificate Fingerprint (for assetlinks.json)', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_deep_sha256" name="deep_linking[sha256_fingerprint]" value="<?php echo esc_attr( $features['deep_linking']['sha256_fingerprint'] ); ?>" class="large-text code" placeholder="14:6D:E9:D6:0F:4B:..." />
+								<p class="description"><?php esc_html_e( 'Your keystore SHA-256 fingerprint required for automatic Android App Links domain verification.', 'bizgrowth360-app-builder' ); ?></p>
+							</div>
+							<div class="bg360-form-row">
+								<label>
+									<input type="checkbox" name="deep_linking[auto_verify]" value="1" <?php checked( $features['deep_linking']['auto_verify'] ); ?> />
+									<?php esc_html_e( 'Enable autoVerify="true" in AndroidManifest intent-filter', 'bizgrowth360-app-builder' ); ?>
+								</label>
+							</div>
+							<div class="bg360-card-actions">
+								<button type="button" class="button button-secondary" id="bg360-preview-assetlinks-btn">
+									<span class="dashicons dashicons-media-code"></span> <?php esc_html_e( 'Preview assetlinks.json', 'bizgrowth360-app-builder' ); ?>
+								</button>
+								<a href="<?php echo esc_url( home_url( '/.well-known/assetlinks.json' ) ); ?>" target="_blank" class="button button-link">
+									<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'View Live /.well-known/assetlinks.json', 'bizgrowth360-app-builder' ); ?>
+								</a>
+							</div>
+						</div>
+					</div>
+
+					<!-- CARD 3: Native Share Sheet -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-share bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'Native Share Sheet', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Invoke the native Android system share sheet with zero-configuration fallback for web browsers.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+							<label class="bg360-switch">
+								<input type="checkbox" id="feat_share_enabled" name="native_share[enabled]" value="1" <?php checked( ! empty( $features['native_share']['enabled'] ) ); ?> />
+								<span class="bg360-slider"></span>
+							</label>
+						</div>
+						<div class="bg360-feature-card-body" id="body_native_share">
+							<div class="bg360-form-row">
+								<label for="feat_share_title"><?php esc_html_e( 'Default Share Title', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_share_title" name="native_share[default_title]" value="<?php echo esc_attr( $features['native_share']['default_title'] ); ?>" class="regular-text" />
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_share_text"><?php esc_html_e( 'Default Share Text / Body', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_share_text" name="native_share[default_text]" value="<?php echo esc_attr( $features['native_share']['default_text'] ); ?>" class="large-text" />
+							</div>
+						</div>
+					</div>
+
+					<!-- CARD 4: Camera Access & File Uploads -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-camera bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'Camera Access & File Uploads', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Enables web forms (<input type="file">) to capture photos from camera or select documents from device gallery.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+						</div>
+						<div class="bg360-feature-card-body">
+							<div class="bg360-form-row">
+								<label>
+									<input type="checkbox" name="camera_upload[camera_enabled]" value="1" <?php checked( ! empty( $features['camera_upload']['camera_enabled'] ) ); ?> />
+									<strong><?php esc_html_e( 'Enable Camera Capture', 'bizgrowth360-app-builder' ); ?></strong>
+									<span class="description" style="display:block;"><?php esc_html_e( 'Injects android.permission.CAMERA and configures FileProvider for camera intent.', 'bizgrowth360-app-builder' ); ?></span>
+								</label>
+							</div>
+							<div class="bg360-form-row">
+								<label>
+									<input type="checkbox" name="camera_upload[gallery_enabled]" value="1" <?php checked( ! empty( $features['camera_upload']['gallery_enabled'] ) ); ?> />
+									<strong><?php esc_html_e( 'Enable Media Gallery & File Picker', 'bizgrowth360-app-builder' ); ?></strong>
+									<span class="description" style="display:block;"><?php esc_html_e( 'Injects READ_MEDIA_IMAGES (Android 13+) and READ_EXTERNAL_STORAGE.', 'bizgrowth360-app-builder' ); ?></span>
+								</label>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_upload_max_size"><?php esc_html_e( 'Maximum File Size (MB)', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="number" id="feat_upload_max_size" name="camera_upload[max_file_size_mb]" value="<?php echo esc_attr( $features['camera_upload']['max_file_size_mb'] ); ?>" min="1" max="200" class="small-text" /> MB
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_upload_mimes"><?php esc_html_e( 'Allowed MIME Types', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_upload_mimes" name="camera_upload[allowed_mime_types]" value="<?php echo esc_attr( $features['camera_upload']['allowed_mime_types'] ); ?>" class="regular-text" placeholder="image/*,application/pdf" />
+							</div>
+						</div>
+					</div>
+
+					<!-- CARD 5: Offline Engine -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-cloud bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'Offline Engine & Auto-Reconnect', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Displays a branded, elegant offline fallback screen when network connectivity is lost and automatically recovers.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+							<label class="bg360-switch">
+								<input type="checkbox" id="feat_offline_enabled" name="offline_engine[enabled]" value="1" <?php checked( ! empty( $features['offline_engine']['enabled'] ) ); ?> />
+								<span class="bg360-slider"></span>
+							</label>
+						</div>
+						<div class="bg360-feature-card-body" id="body_offline_engine">
+							<div class="bg360-form-row">
+								<label for="feat_offline_title"><?php esc_html_e( 'Offline Screen Title', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_offline_title" name="offline_engine[title]" value="<?php echo esc_attr( $features['offline_engine']['title'] ); ?>" class="regular-text" />
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_offline_message"><?php esc_html_e( 'Offline Screen Message', 'bizgrowth360-app-builder' ); ?></label>
+								<textarea id="feat_offline_message" name="offline_engine[message]" rows="2" class="large-text"><?php echo esc_textarea( $features['offline_engine']['message'] ); ?></textarea>
+							</div>
+							<div class="bg360-form-row">
+								<label>
+									<input type="checkbox" name="offline_engine[auto_reconnect]" value="1" <?php checked( $features['offline_engine']['auto_reconnect'] ); ?> />
+									<?php esc_html_e( 'Auto-reload page as soon as internet connection is restored', 'bizgrowth360-app-builder' ); ?>
+								</label>
+							</div>
+						</div>
+					</div>
+
+					<!-- CARD 6: Native Permission Management -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-shield bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'Native Permission Management', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Follows Google Play best practices: requests permissions on-demand with user-friendly educational rationales.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+							<label class="bg360-switch">
+								<input type="checkbox" id="feat_perm_enabled" name="permission_manager[enabled]" value="1" <?php checked( ! empty( $features['permission_manager']['enabled'] ) ); ?> />
+								<span class="bg360-slider"></span>
+							</label>
+						</div>
+						<div class="bg360-feature-card-body" id="body_permission_manager">
+							<div class="bg360-form-row">
+								<label>
+									<input type="checkbox" name="permission_manager[location_enabled]" value="1" <?php checked( ! empty( $features['permission_manager']['location_enabled'] ) ); ?> />
+									<strong><?php esc_html_e( 'Request Geolocation Permission (GPS / Location)', 'bizgrowth360-app-builder' ); ?></strong>
+									<span class="description" style="display:block;"><?php esc_html_e( 'Injects ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION only if your website uses map/location features.', 'bizgrowth360-app-builder' ); ?></span>
+								</label>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_perm_rationale_title"><?php esc_html_e( 'Rationale Dialog Title', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="text" id="feat_perm_rationale_title" name="permission_manager[rationale_title]" value="<?php echo esc_attr( $features['permission_manager']['rationale_title'] ); ?>" class="regular-text" />
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_perm_rationale_msg"><?php esc_html_e( 'Rationale Educational Message', 'bizgrowth360-app-builder' ); ?></label>
+								<textarea id="feat_perm_rationale_msg" name="permission_manager[rationale_message]" rows="2" class="large-text"><?php echo esc_textarea( $features['permission_manager']['rationale_message'] ); ?></textarea>
+							</div>
+						</div>
+					</div>
+
+					<!-- CARD 7: In-App Update Management -->
+					<div class="bizgrowth360-card bg360-feature-card">
+						<div class="bg360-feature-card-header">
+							<div class="bg360-feature-card-title">
+								<span class="dashicons dashicons-update bg360-card-icon"></span>
+								<div>
+									<h4><?php esc_html_e( 'In-App Update Management', 'bizgrowth360-app-builder' ); ?></h4>
+									<p class="description"><?php esc_html_e( 'Notify users when a new APK or Play Store release is available, with support for flexible or mandatory updates.', 'bizgrowth360-app-builder' ); ?></p>
+								</div>
+							</div>
+							<label class="bg360-switch">
+								<input type="checkbox" id="feat_update_enabled" name="app_updates[enabled]" value="1" <?php checked( ! empty( $features['app_updates']['enabled'] ) ); ?> />
+								<span class="bg360-slider"></span>
+							</label>
+						</div>
+						<div class="bg360-feature-card-body" id="body_app_updates">
+							<div class="bg360-form-row">
+								<div class="bg360-input-group">
+									<div>
+										<label for="feat_min_version"><?php esc_html_e( 'Minimum Required Version Code', 'bizgrowth360-app-builder' ); ?></label>
+										<input type="number" id="feat_min_version" name="app_updates[min_version_code]" value="<?php echo esc_attr( $features['app_updates']['min_version_code'] ); ?>" min="1" class="small-text" />
+									</div>
+									<div>
+										<label for="feat_latest_version"><?php esc_html_e( 'Latest Released Version Code', 'bizgrowth360-app-builder' ); ?></label>
+										<input type="number" id="feat_latest_version" name="app_updates[latest_version_code]" value="<?php echo esc_attr( $features['app_updates']['latest_version_code'] ); ?>" min="1" class="small-text" />
+									</div>
+									<div>
+										<label for="feat_latest_version_name"><?php esc_html_e( 'Latest Version Name', 'bizgrowth360-app-builder' ); ?></label>
+										<input type="text" id="feat_latest_version_name" name="app_updates[latest_version_name]" value="<?php echo esc_attr( $features['app_updates']['latest_version_name'] ); ?>" class="small-text" placeholder="1.0.0" />
+									</div>
+								</div>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_update_mode"><?php esc_html_e( 'Update Enforcement Mode', 'bizgrowth360-app-builder' ); ?></label>
+								<select id="feat_update_mode" name="app_updates[mode]">
+									<option value="recommended" <?php selected( $features['app_updates']['mode'], 'recommended' ); ?>><?php esc_html_e( 'Recommended (Dismissible Dialog)', 'bizgrowth360-app-builder' ); ?></option>
+									<option value="mandatory" <?php selected( $features['app_updates']['mode'], 'mandatory' ); ?>><?php esc_html_e( 'Mandatory (Blocking Modal - Requires Update)', 'bizgrowth360-app-builder' ); ?></option>
+								</select>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_update_changelog"><?php esc_html_e( 'Changelog / Release Notes', 'bizgrowth360-app-builder' ); ?></label>
+								<textarea id="feat_update_changelog" name="app_updates[changelog]" rows="2" class="large-text"><?php echo esc_textarea( $features['app_updates']['changelog'] ); ?></textarea>
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_update_play_url"><?php esc_html_e( 'Google Play Store URL', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="url" id="feat_update_play_url" name="app_updates[play_store_url]" value="<?php echo esc_attr( $features['app_updates']['play_store_url'] ); ?>" class="large-text" placeholder="https://play.google.com/store/apps/details?id=..." />
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_update_apk_url"><?php esc_html_e( 'Direct APK Download URL', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="url" id="feat_update_apk_url" name="app_updates[direct_apk_url]" value="<?php echo esc_attr( $features['app_updates']['direct_apk_url'] ); ?>" class="large-text" placeholder="https://example.com/downloads/app.apk" />
+							</div>
+							<div class="bg360-card-actions">
+								<a href="<?php echo esc_url( home_url( '/wp-json/bizgrowth360/v1/app-update' ) ); ?>" target="_blank" class="button button-secondary">
+									<span class="dashicons dashicons-rest-api"></span> <?php esc_html_e( 'Inspect Update JSON Endpoint', 'bizgrowth360-app-builder' ); ?>
+								</a>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Save Action Bar -->
+				<div class="bizgrowth360-features-footer">
+					<button type="button" class="button button-primary bg360-btn-large" id="bg360-save-features-btn">
+						<span class="dashicons dashicons-saved"></span> <?php esc_html_e( 'Save Native Features Settings', 'bizgrowth360-app-builder' ); ?>
+					</button>
+					<span class="bg360-save-status" id="bg360-features-save-status"></span>
+				</div>
+			</form>
+
+			<!-- MODAL: Test Push Notification -->
+			<div id="bg360-test-push-modal" class="bg360-modal-overlay" style="display:none;">
+				<div class="bg360-modal-box">
+					<div class="bg360-modal-header">
+						<h3><span class="dashicons dashicons-bell"></span> <?php esc_html_e( 'Send Test Push Notification', 'bizgrowth360-app-builder' ); ?></h3>
+						<button type="button" class="bg360-modal-close" data-close="#bg360-test-push-modal">&times;</button>
+					</div>
+					<div class="bg360-modal-body">
+						<div class="bg360-form-row">
+							<label for="test_push_title"><?php esc_html_e( 'Notification Title', 'bizgrowth360-app-builder' ); ?></label>
+							<input type="text" id="test_push_title" class="regular-text" value="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>: Test Notification" />
+						</div>
+						<div class="bg360-form-row">
+							<label for="test_push_body"><?php esc_html_e( 'Notification Message', 'bizgrowth360-app-builder' ); ?></label>
+							<textarea id="test_push_body" rows="2" class="large-text"><?php esc_html_e( 'Hello from Bizgrowth360! Your native Android push notification system is working perfectly.', 'bizgrowth360-app-builder' ); ?></textarea>
+						</div>
+						<div class="bg360-form-row">
+							<label for="test_push_url"><?php esc_html_e( 'Target Webpage URL (Deep Link)', 'bizgrowth360-app-builder' ); ?></label>
+							<input type="url" id="test_push_url" class="large-text" value="<?php echo esc_url( home_url() ); ?>" />
+						</div>
+						<div id="test-push-response" style="margin-top:10px;"></div>
+					</div>
+					<div class="bg360-modal-footer">
+						<button type="button" class="button button-primary" id="bg360-send-push-confirm-btn">
+							<span class="dashicons dashicons-controls-play"></span> <?php esc_html_e( 'Send Notification Now', 'bizgrowth360-app-builder' ); ?>
+						</button>
+						<button type="button" class="button" data-close="#bg360-test-push-modal"><?php esc_html_e( 'Cancel', 'bizgrowth360-app-builder' ); ?></button>
+					</div>
+				</div>
+			</div>
+
+			<!-- MODAL: Digital Asset Links Preview -->
+			<div id="bg360-assetlinks-modal" class="bg360-modal-overlay" style="display:none;">
+				<div class="bg360-modal-box">
+					<div class="bg360-modal-header">
+						<h3><span class="dashicons dashicons-media-code"></span> <?php esc_html_e( 'Digital Asset Links (assetlinks.json)', 'bizgrowth360-app-builder' ); ?></h3>
+						<button type="button" class="bg360-modal-close" data-close="#bg360-assetlinks-modal">&times;</button>
+					</div>
+					<div class="bg360-modal-body">
+						<p class="description">
+							<?php esc_html_e( 'Android verifies domain ownership by fetching /.well-known/assetlinks.json over HTTPS. The JSON payload below is dynamically served by this plugin.', 'bizgrowth360-app-builder' ); ?>
+						</p>
+						<pre id="bg360-assetlinks-content" style="background:#1e1e1e; color:#d4d4d4; padding:12px; border-radius:6px; overflow:auto; max-height:250px; font-size:12px;"></pre>
+					</div>
+					<div class="bg360-modal-footer">
+						<a href="<?php echo esc_url( home_url( '/.well-known/assetlinks.json' ) ); ?>" target="_blank" class="button button-primary">
+							<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'Open in Browser', 'bizgrowth360-app-builder' ); ?>
+						</a>
+						<button type="button" class="button" data-close="#bg360-assetlinks-modal"><?php esc_html_e( 'Close', 'bizgrowth360-app-builder' ); ?></button>
+					</div>
+				</div>
 			</div>
 		</div>
 		<?php

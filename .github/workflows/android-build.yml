@@ -109,6 +109,11 @@ on:
         required: false
         type: string
         default: ''
+      features_json:
+        description: 'Native App Features JSON payload (normally sent by the WordPress plugin)'
+        required: false
+        type: string
+        default: ''
 
   push:
     branches:
@@ -220,6 +225,7 @@ jobs:
           ALLOW_EXTERNAL_LINKS: ${{ inputs.allow_external_links || '' }}
           ENABLE_STATUS_BAR: ${{ inputs.enable_status_bar || '' }}
           DESIGN_JSON: ${{ inputs.design_json || '' }}
+          FEATURES_JSON: ${{ inputs.features_json || '' }}
           BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           node scripts/build-app.js --config "$CONFIG_FILE"

@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { defaultFeatures, validateFeatures } = require('./native-features-config');
 
 // Android Java & Kotlin reserved keywords that cannot be used as package segments
 const RESERVED_JAVA_KEYWORDS = new Set([
@@ -512,6 +513,11 @@ function validateConfig(config, options = {}) {
     backgroundColor
   );
 
+  const featResult = validateFeatures(config.features, config);
+  if (!featResult.valid) {
+    errors.push(...featResult.errors);
+  }
+
   return {
     valid: errors.length === 0,
     errors,
@@ -535,7 +541,8 @@ function validateConfig(config, options = {}) {
       allow_external_links: config.allow_external_links !== false,
       enable_status_bar: config.enable_status_bar !== false,
       build_type: buildType,
-      build_variant: buildVariant
+      build_variant: buildVariant,
+      features: featResult.normalizedFeatures
     }
   };
 }
@@ -679,6 +686,8 @@ module.exports = {
   sanitizeFileComponent,
   buildArtifactBaseName,
   findDuplicatePackageIds,
+  defaultFeatures,
+  validateFeatures,
   RESERVED_JAVA_KEYWORDS,
   ALLOWED_ORIENTATIONS,
   ALLOWED_BUILD_TYPES,

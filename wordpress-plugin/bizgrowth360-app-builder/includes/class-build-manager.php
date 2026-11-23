@@ -195,6 +195,19 @@ class BuildManager {
 		}
 		$config['design'] = $design;
 
+		// Native Features snapshot
+		$features = null;
+		if ( isset( $custom_inputs['features'] ) && is_array( $custom_inputs['features'] ) ) {
+			$features = $custom_inputs['features'];
+		} else {
+			$features = NativeFeatures::get_features();
+		}
+		$features_json = wp_json_encode( $features );
+		if ( false === $features_json || strlen( $features_json ) > 60000 ) {
+			$features_json = '{}';
+		}
+		$config['features'] = $features;
+
 		// Create unique build ID
 		$build_id = 'bg360_bld_' . wp_generate_password( 12, false, false );
 
@@ -242,6 +255,7 @@ class BuildManager {
 			'allow_external_links'   => $config['allow_external_links'] ? 'true' : 'false',
 			'enable_status_bar'      => $config['enable_status_bar'] ? 'true' : 'false',
 			'design_json'            => $design_json,
+			'features_json'          => $features_json,
 			'config_file'            => 'config/default-app.json',
 		);
 

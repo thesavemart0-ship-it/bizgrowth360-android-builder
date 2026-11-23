@@ -42,6 +42,12 @@ const {
   applyDesignToConfig,
   designSummary
 } = require('../scripts/design-config');
+const {
+  defaultFeatures,
+  validateFeatures,
+  featuresSummary
+} = require('../scripts/native-features-config');
+const { loadFeatures } = require('../scripts/build-app');
 const { validateApk, validateAab, inspectZipArchive } = require('../scripts/validate-output');
 
 const BASE_CONFIG = {
@@ -756,4 +762,179 @@ test('inspectZipArchive rejects random data', () => {
   const file = path.join(dir, 'random.bin');
   fs.writeFileSync(file, Buffer.from('this is definitely not a zip file'));
   assert.throws(() => inspectZipArchive(file), /ZIP|EOCD|invalid/i);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6: Native Features validation & build engine tests
+// ---------------------------------------------------------------------------
+
+test('native features defaults include all 7 features', () => {
+  const defs = defaultFeatures(BASE_CONFIG);
+  assert.equal(defs.schema_version, 1);
+  assert.equal(typeof defs.push_notifications, 'object');
+  assert.equal(defs.push_notifications.enabled, false);
+  assert.equal(defs.push_notifications.channel_id, 'default_channel');
+
+  assert.equal(typeof defs.deep_linking, 'object');
+  assert.equal(defs.deep_linking.enabled, false);
+  assert.equal(defs.deep_linking.domain, 'mahankalistore.example.com');
+  assert.equal(defs.deep_linking.scheme, 'bizgrowth360');
+
+  assert.equal(typeof defs.native_share, 'object');
+  assert.equal(defs.native_share.enabled, true);
+
+  assert.equal(typeof defs.camera_upload, 'object');
+  assert.equal(defs.camera_upload.camera_enabled, true);
+  assert.equal(defs.camera_upload.gallery_enabled, true);
+
+  assert.equal(typeof defs.offline_engine, 'object');
+  assert.equal(defs.offline_engine.enabled, true);
+  assert.equal(defs.offline_engine.auto_reconnect, true);
+
+  assert.equal(typeof defs.permission_manager, 'object');
+  assert.equal(defs.permission_manager.enabled, true);
+  assert.equal(defs.permission_manager.location_enabled, false);
+
+  assert.equal(typeof defs.app_updates, 'object');
+  assert.equal(defs.app_updates.enabled, true);
+  assert.equal(defs.app_updates.mode, 'recommended');
+});
+
+test('validateFeatures normalizes inputs and sanitizes invalid strings', () => {
+  const custom = {
+    push_notifications: {
+      enabled: 1,
+      channel_id: 'sales alert!',
+      firebase_project_id: 'my-proj-123',
+      firebase_server_key: 'key-abc'
+    },
+    deep_linking: {
+      enabled: true,
+      domain: 'https://Sub.MySite.com/extra/',
+      scheme: 'MY-APP-123!'
+    },
+    camera_upload: {
+      camera_enabled: false,
+      max_file_size_mb: 500
+    },
+    app_updates: {
+      min_version_code: '5',
+      mode: 'mandatory'
+    }
+  };
+
+  const res = validateFeatures(custom, BASE_CONFIG);
+  assert.equal(res.valid, true);
+  assert.equal(res.normalizedFeatures.push_notifications.enabled, true);
+  assert.equal(res.normalizedFeatures.push_notifications.channel_id, 'sales_alert_');
+  assert.equal(res.normalizedFeatures.deep_linking.domain, 'sub.mysite.com');
+  assert.equal(res.normalizedFeatures.deep_linking.scheme, 'my-app-123');
+  assert.equal(res.normalizedFeatures.camera_upload.camera_enabled, false);
+  assert.equal(res.normalizedFeatures.camera_upload.max_file_size_mb, 200);
+  assert.equal(res.normalizedFeatures.app_updates.min_version_code, 5);
+  assert.equal(res.normalizedFeatures.app_updates.mode, 'mandatory');
+});
+
+test('validateFeatures handles JSON strings and malformed input', () => {
+  const jsonStr = JSON.stringify({
+    push_notifications: { enabled: true, channel_id: 'promo_channel' }
+  });
+  const res = validateFeatures(jsonStr, BASE_CONFIG);
+  assert.equal(res.valid, true);
+  assert.equal(res.normalizedFeatures.push_notifications.enabled, true);
+  assert.equal(res.normalizedFeatures.push_notifications.channel_id, 'promo_channel');
+
+  const badJson = validateFeatures('{ not json at all', BASE_CONFIG);
+  assert.equal(badJson.valid, false);
+  assert.ok(badJson.errors[0].includes('Invalid features JSON'));
+});
+
+test('featuresSummary generates descriptive output for logs', () => {
+  const defs = defaultFeatures(BASE_CONFIG);
+  const summary = featuresSummary(defs);
+  assert.ok(Array.isArray(summary));
+  assert.ok(summary.some(s => s.includes('Push Notifications: DISABLED')));
+  assert.ok(summary.some(s => s.includes('Native Share: ENABLED')));
+});
+
+test('prepareApp injects native feature permissions, intent filters, and FCM metadata', () => {
+  const { project } = createProjectFixture('features-test');
+  const customFeatures = {
+    push_notifications: {
+      enabled: true,
+      channel_id: 'order_updates',
+      google_services_json: '{"test_project": "firebase_ok"}'
+    },
+    deep_linking: {
+      enabled: true,
+      domain: 'shop.example.com',
+      scheme: 'shopapp',
+      auto_verify: true
+    },
+    camera_upload: {
+      camera_enabled: true,
+      gallery_enabled: true
+    },
+    permission_manager: {
+      location_enabled: true
+    }
+  };
+
+  prepareApp({
+    projectDir: project,
+    config: BASE_CONFIG,
+    features: customFeatures
+  });
+
+  const manifest = fs.readFileSync(path.join(project, 'android/app/src/main/AndroidManifest.xml'), 'utf8');
+
+  // Permissions
+  assert.ok(manifest.includes('android.permission.POST_NOTIFICATIONS'));
+  assert.ok(manifest.includes('android.permission.CAMERA'));
+  assert.ok(manifest.includes('android.permission.READ_MEDIA_IMAGES'));
+  assert.ok(manifest.includes('android.permission.ACCESS_FINE_LOCATION'));
+
+  // Notification Channel meta-data
+  assert.ok(manifest.includes('default_notification_channel_id'));
+  assert.ok(manifest.includes('order_updates'));
+
+  // Deep Link Intent Filters
+  assert.ok(manifest.includes('android:scheme="https"'));
+  assert.ok(manifest.includes('android:host="shop.example.com"'));
+  assert.ok(manifest.includes('android:scheme="shopapp"'));
+
+  // google-services.json written
+  const gsPath = path.join(project, 'android/app/google-services.json');
+  assert.ok(fs.existsSync(gsPath));
+  assert.ok(fs.readFileSync(gsPath, 'utf8').includes('firebase_ok'));
+
+  // MainActivity contains deep linking handlers
+  const mainActivity = fs.readFileSync(
+    path.join(project, 'android/app/src/main/java/in/bizgrowth360/mahankalistore/MainActivity.java'),
+    'utf8'
+  );
+  assert.ok(mainActivity.includes('onNewIntent'));
+  assert.ok(mainActivity.includes('handleDeepLinkIntent'));
+
+  // app-config.js contains features block
+  const appConfig = fs.readFileSync(path.join(project, 'public/app-config.js'), 'utf8');
+  assert.ok(appConfig.includes('features: {'));
+  assert.ok(appConfig.includes('order_updates'));
+});
+
+test('native javascript bridge exists and is injected in HTML', () => {
+  const publicBridge = path.join(TEMPLATE, 'public/bizgrowth360-bridge.js');
+  const srcBridge = path.join(TEMPLATE, 'src/bizgrowth360-bridge.js');
+  assert.ok(fs.existsSync(publicBridge));
+  assert.ok(fs.existsSync(srcBridge));
+
+  const bridgeContent = fs.readFileSync(publicBridge, 'utf8');
+  assert.ok(bridgeContent.includes('Bizgrowth360Bridge'));
+  assert.ok(bridgeContent.includes('getAppInfo'));
+  assert.ok(bridgeContent.includes('share: function'));
+  assert.ok(bridgeContent.includes('checkUpdate: function'));
+  assert.ok(bridgeContent.includes('registerPushToken: function'));
+
+  const publicHtml = fs.readFileSync(path.join(TEMPLATE, 'public/index.html'), 'utf8');
+  assert.ok(publicHtml.includes('bizgrowth360-bridge.js'));
 });

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "basic-ftp": "^6.2.6",
+    "plist": "^5.1.2",
     "sharp": "^0.33.5",
     "yaml": "^2.9.1"
   }

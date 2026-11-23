@@ -27,8 +27,11 @@ define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
 // Autoload plugin classes
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-config.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-build-db.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-device-tokens-db.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-settings.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-design-config.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-native-features.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-rest-api.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-github-client.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-build-manager.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-ajax-handler.php';
@@ -43,14 +46,21 @@ function bizgrowth360_app_builder_init() {
 	$build_manager = new \Bizgrowth360\AppBuilder\BuildManager( $settings, $github_client );
 	$ajax_handler  = new \Bizgrowth360\AppBuilder\AjaxHandler( $settings, $github_client, $build_manager );
 	$admin_page    = new \Bizgrowth360\AppBuilder\AdminPage( $settings, $github_client, $build_manager );
+	$rest_api      = new \Bizgrowth360\AppBuilder\RestApi();
 
 	$settings->init();
 	$ajax_handler->init();
 	$admin_page->init();
+	$rest_api->init();
 
-	// Ensure DB table exists
-	if ( is_admin() && get_option( \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION ) {
-		\Bizgrowth360\AppBuilder\BuildDb::install_table();
+	// Ensure DB tables exist
+	if ( is_admin() ) {
+		if ( get_option( \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION ) {
+			\Bizgrowth360\AppBuilder\BuildDb::install_table();
+		}
+		if ( get_option( \Bizgrowth360\AppBuilder\DeviceTokensDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\DeviceTokensDb::DB_VERSION ) {
+			\Bizgrowth360\AppBuilder\DeviceTokensDb::install_table();
+		}
 	}
 }
 add_action( 'plugins_loaded', 'bizgrowth360_app_builder_init' );
@@ -62,5 +72,6 @@ function bizgrowth360_app_builder_activate() {
 	$settings = new \Bizgrowth360\AppBuilder\Settings();
 	$settings->set_defaults();
 	\Bizgrowth360\AppBuilder\BuildDb::install_table();
+	\Bizgrowth360\AppBuilder\DeviceTokensDb::install_table();
 }
 register_activation_hook( __FILE__, 'bizgrowth360_app_builder_activate' );

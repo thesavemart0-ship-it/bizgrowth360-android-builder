@@ -32,6 +32,7 @@ const { prepareApp } = require('./prepare-app');
 const { generateIcons, validateImageAsset } = require('./generate-icons');
 const { validateApk, validateAab, computeSha256 } = require('./validate-output');
 const { validateDesign, applyDesignToConfig, designSummary } = require('./design-config');
+const { validateFeatures, defaultFeatures, featuresSummary } = require('./native-features-config');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const TEMPLATE_DIR = path.join(ROOT_DIR, 'app-template');
@@ -91,7 +92,8 @@ function parseArgs(argv) {
     '--orientation': 'orientation',
     '--icon-url': 'iconUrl',
     '--splash-url': 'splashUrl',
-    '--design-json': 'designJson'
+    '--design-json': 'designJson',
+    '--features-json': 'featuresJson'
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -229,6 +231,22 @@ function loadDesign(options, appConfig) {
     throw new Error(`Design configuration validation failed:\n  - ${result.errors.join('\n  - ')}`);
   }
   return result;
+}
+
+function loadFeatures(options, appConfig) {
+  let raw = options.features;
+  if (raw === undefined) {
+    const envFeatures = envValue('FEATURES_JSON');
+    if (envFeatures) raw = envFeatures;
+  }
+  if (raw === undefined && options.featuresJson) raw = options.featuresJson;
+  if (raw === undefined && appConfig && appConfig.features !== undefined) raw = appConfig.features;
+
+  const result = validateFeatures(raw === undefined ? null : raw, appConfig || {});
+  if (!result.valid) {
+    throw new Error(`Features configuration validation failed:\n  - ${result.errors.join('\n  - ')}`);
+  }
+  return result.normalizedFeatures;
 }
 
 function verifyTemplate() {
@@ -662,6 +680,7 @@ async function buildApp(options = {}) {
     const rawConfig = loadConfiguration(options);
     const validation = validateConfig(rawConfig);
     const designResult = loadDesign(options, rawConfig);
+    const features = loadFeatures(options, rawConfig);
     const design = designResult.design;
     const effectiveConfig = applyDesignToConfig(validation.normalizedConfig, design);
     const buildType = effectiveConfig.build_type;
@@ -683,6 +702,8 @@ async function buildApp(options = {}) {
     addCheck(summary, 'Design Studio schema', designResult.valid,
       `v${design.schema_version}, ${design.homepage.sections.length} section(s), ` +
       `${design.navigation.items.length} navigation item(s), ${design.menu.items.length} menu item(s).`);
+    addCheck(summary, 'Native Features schema', true,
+      `Push=${features.push_notifications?.enabled ? 'ON' : 'OFF'}, DeepLinks=${features.deep_linking?.enabled ? 'ON' : 'OFF'}, Camera=${features.camera_upload?.camera_enabled ? 'ON' : 'OFF'}`);
     for (const warning of validation.warnings.concat(designResult.warnings)) {
       addCheck(summary, 'Configuration warning', true, warning);
     }
@@ -747,7 +768,7 @@ async function buildApp(options = {}) {
     // ---------------------------------------------------------------
     // 5. Apply configuration + generate resources
     // ---------------------------------------------------------------
-    const preparedConfig = prepareApp({ projectDir: workspaceProjectDir, config, design });
+    const preparedConfig = prepareApp({ projectDir: workspaceProjectDir, config, design, features });
     addCheck(summary, 'Configuration applied', true,
       'capacitor.config, app-config.js, strings.xml, colors.xml, styles.xml, manifest, Gradle and MainActivity updated.');
 
@@ -989,6 +1010,7 @@ module.exports = {
   buildApp,
   loadConfiguration,
   loadDesign,
+  loadFeatures,
   parseArgs,
   buildTasks,
   downloadAsset,

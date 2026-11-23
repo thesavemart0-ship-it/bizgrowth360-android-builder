@@ -25,6 +25,7 @@
 		initModals();
 		initBuildButtons();
 		initBuildCenter();
+		initNativeFeatures();
 
 		// Initial check on load
 		loadActiveBuildOrHistory();
@@ -782,6 +783,153 @@
 			.replace(/>/g, '&gt;')
 			.replace(/"/g, '&quot;')
 			.replace(/'/g, '&#039;');
+	}
+
+	/**
+	 * Native Features Management
+	 */
+	function initNativeFeatures() {
+		// Toggle password visibility
+		$('.bg360-toggle-password').on('click', function () {
+			var target = $($(this).data('target'));
+			var isPassword = target.attr('type') === 'password';
+			target.attr('type', isPassword ? 'text' : 'password');
+			$(this).find('.dashicons').toggleClass('dashicons-visibility dashicons-hidden');
+		});
+
+		// Save Native Features
+		$('#bg360-save-features-btn').on('click', function (e) {
+			e.preventDefault();
+			var btn = $(this);
+			var statusEl = $('#bg360-features-save-status');
+
+			btn.prop('disabled', true).addClass('updating-message');
+			statusEl.text('Saving settings...').css('color', '#64748B');
+
+			var formArray = $('#bg360-native-features-form').serializeArray();
+			var features = {
+				push_notifications: { enabled: false },
+				deep_linking: { enabled: false, auto_verify: false },
+				native_share: { enabled: false },
+				camera_upload: { camera_enabled: false, gallery_enabled: false },
+				offline_engine: { enabled: false, auto_reconnect: false },
+				permission_manager: { enabled: false, location_enabled: false },
+				app_updates: { enabled: false }
+			};
+
+			$.each(formArray, function () {
+				var name = this.name;
+				var val = this.value;
+
+				var match = name.match(/^([a-z_]+)\[([a-z_]+)\]$/);
+				if (match) {
+					var section = match[1];
+					var field = match[2];
+					if (!features[section]) features[section] = {};
+
+					if (val === '1' && (field === 'enabled' || field === 'camera_enabled' || field === 'gallery_enabled' || field === 'auto_reconnect' || field === 'location_enabled' || field === 'auto_verify')) {
+						features[section][field] = true;
+					} else {
+						features[section][field] = val;
+					}
+				}
+			});
+
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_save_native_features',
+				nonce: bizgrowth360AppBuilder.nonce,
+				features: JSON.stringify(features)
+			}, function (res) {
+				btn.prop('disabled', false).removeClass('updating-message');
+				if (res.success) {
+					statusEl.text(res.data.message || 'Saved!').css('color', '#10B981');
+					updateFeatureChips(res.data.status);
+					setTimeout(function () { statusEl.fadeOut(500, function () { $(this).text('').show(); }); }, 3000);
+				} else {
+					statusEl.text(res.data.message || 'Save error').css('color', '#EF4444');
+				}
+			}).fail(function () {
+				btn.prop('disabled', false).removeClass('updating-message');
+				statusEl.text('Connection error saving features.').css('color', '#EF4444');
+			});
+		});
+
+		// Open Test Push Modal
+		$('#bg360-open-test-push-btn').on('click', function () {
+			$('#test-push-response').empty();
+			$('#bg360-test-push-modal').fadeIn(200);
+		});
+
+		// Send Test Push
+		$('#bg360-send-push-confirm-btn').on('click', function () {
+			var sendBtn = $(this);
+			var responseDiv = $('#test-push-response');
+			var title = $('#test_push_title').val();
+			var body = $('#test_push_body').val();
+			var url = $('#test_push_url').val();
+
+			sendBtn.prop('disabled', true).text('Dispatching FCM Push...');
+			responseDiv.html('<p style="color:#64748B;">Connecting to Firebase Cloud Messaging...</p>');
+
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_send_test_push',
+				nonce: bizgrowth360AppBuilder.nonce,
+				title: title,
+				body: body,
+				url: url
+			}, function (res) {
+				sendBtn.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Send Notification Now');
+				if (res.success) {
+					responseDiv.html('<div class="notice notice-success inline" style="margin:5px 0; padding:8px 12px;"><p>' + escapeHtml(res.data.message) + '</p></div>');
+				} else {
+					responseDiv.html('<div class="notice notice-error inline" style="margin:5px 0; padding:8px 12px;"><p>' + escapeHtml(res.data.message || 'Failed to dispatch push notification.') + '</p></div>');
+				}
+			}).fail(function () {
+				sendBtn.prop('disabled', false).html('<span class="dashicons dashicons-controls-play"></span> Send Notification Now');
+				responseDiv.html('<div class="notice notice-error inline" style="margin:5px 0; padding:8px 12px;"><p>Network request failed.</p></div>');
+			});
+		});
+
+		// Preview assetlinks.json Modal
+		$('#bg360-preview-assetlinks-btn').on('click', function () {
+			var sha256 = $('#feat_deep_sha256').val();
+			$('#bg360-assetlinks-content').text('Generating Digital Asset Links payload...');
+			$('#bg360-assetlinks-modal').fadeIn(200);
+
+			$.post(bizgrowth360AppBuilder.ajax_url, {
+				action: 'bizgrowth360_generate_assetlinks',
+				nonce: bizgrowth360AppBuilder.nonce,
+				sha256_fingerprint: sha256
+			}, function (res) {
+				if (res.success && res.data.assetlinks_json) {
+					$('#bg360-assetlinks-content').text(res.data.assetlinks_json);
+				} else {
+					$('#bg360-assetlinks-content').text('Could not generate assetlinks.json');
+				}
+			}).fail(function () {
+				$('#bg360-assetlinks-content').text('Error fetching assetlinks.json');
+			});
+		});
+
+		// Modal close buttons
+		$('[data-close]').on('click', function (e) {
+			e.preventDefault();
+			var target = $(this).data('close');
+			$(target).fadeOut(150);
+		});
+	}
+
+	function updateFeatureChips(statuses) {
+		if (!statuses) return;
+		$.each(statuses, function (key, status) {
+			var chip = $('#chip-' + key);
+			if (chip.length) {
+				var badge = chip.find('.bg360-status-badge');
+				badge.removeClass('bg360-chip-configured bg360-chip-needs_setup bg360-chip-enabled bg360-chip-disabled')
+					.addClass('bg360-chip-' + status)
+					.text(status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' '));
+			}
+		});
 	}
 
 })(jQuery);

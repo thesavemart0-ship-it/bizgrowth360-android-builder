@@ -16,6 +16,7 @@ const {
   escapeAndroidString,
   escapeHtml
 } = require('./validate-config');
+const { defaultFeatures, validateFeatures } = require('./native-features-config');
 
 /**
  * Darken a hex color by a given factor (e.g. 0.2 for 20% darker).
@@ -135,6 +136,9 @@ function prepareApp(options = {}) {
   }
 
   const config = validation.normalizedConfig;
+  const features = options.features && typeof options.features === 'object'
+    ? validateFeatures(options.features, config).normalizedFeatures
+    : (config.features || defaultFeatures(config));
   const design = options.design && typeof options.design === 'object' ? options.design : null;
   const website = new URL(config.website_url);
   const websiteHost = website.hostname;
@@ -213,6 +217,7 @@ window.APP_CONFIG = {
   orientation: ${JSON.stringify(config.orientation)},
   allowExternalLinks: ${config.allow_external_links},
   enableStatusBar: ${config.enable_status_bar},
+  features: ${JSON.stringify(features)},
   design: ${JSON.stringify(design || {})}
 };
 `;
@@ -375,6 +380,98 @@ window.APP_CONFIG = {
     );
   }
 
+  // -------------------------------------------------------------------
+  // Dynamic Native Feature Permissions & Manifest Enhancements
+  // -------------------------------------------------------------------
+  const extraPermissions = [];
+  const extraFeatures = [];
+
+  // Push Notifications
+  if (features.push_notifications && features.push_notifications.enabled) {
+    extraPermissions.push('<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />');
+    const channelId = escapeXml(features.push_notifications.channel_id || 'default_channel');
+    if (!manifest.includes('default_notification_channel_id')) {
+      manifest = manifest.replace(
+        '</application>',
+        `    <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="${channelId}" />\n    </application>`
+      );
+    }
+    if (features.push_notifications.google_services_json) {
+      const gsJsonPath = path.join(appDir, 'google-services.json');
+      try {
+        let content = features.push_notifications.google_services_json;
+        if (typeof content === 'object') content = JSON.stringify(content, null, 2);
+        fs.writeFileSync(gsJsonPath, content, 'utf8');
+        console.log('[OK] Generated google-services.json from push_notifications config');
+      } catch (err) {
+        console.warn(`[WARN] Could not write google-services.json: ${err.message}`);
+      }
+    }
+  }
+
+  // Camera & File Upload
+  if (features.camera_upload) {
+    if (features.camera_upload.camera_enabled) {
+      extraPermissions.push('<uses-permission android:name="android.permission.CAMERA" />');
+      extraFeatures.push('<uses-feature android:name="android.hardware.camera" android:required="false" />');
+    }
+    if (features.camera_upload.gallery_enabled) {
+      extraPermissions.push('<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />');
+      extraPermissions.push('<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />');
+    }
+  }
+
+  // Location
+  if (features.permission_manager && features.permission_manager.location_enabled) {
+    extraPermissions.push('<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />');
+    extraPermissions.push('<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />');
+  }
+
+  // Deep Linking & App Links
+  if (features.deep_linking && features.deep_linking.enabled) {
+    const domain = escapeXml(features.deep_linking.domain || websiteHost);
+    const scheme = escapeXml(features.deep_linking.scheme || 'bizgrowth360');
+    const autoVerify = features.deep_linking.auto_verify !== false ? 'true' : 'false';
+
+    const deepLinkFilters = `
+            <!-- Android App Links (Verified HTTPS) -->
+            <intent-filter android:autoVerify="${autoVerify}">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${domain}" />
+            </intent-filter>
+
+            <!-- Custom URL Scheme (${scheme}://) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${scheme}" />
+            </intent-filter>`;
+
+    if (!manifest.includes(`android:host="${domain}"`)) {
+      manifest = manifest.replace(
+        '</activity>',
+        `${deepLinkFilters}\n        </activity>`
+      );
+    }
+  }
+
+  // Inject permissions and features if not already present
+  for (const perm of extraPermissions) {
+    const permMatch = perm.match(/android:name="([^"]+)"/);
+    if (permMatch && !manifest.includes(permMatch[1])) {
+      manifest = manifest.replace('</manifest>', `    ${perm}\n</manifest>`);
+    }
+  }
+  for (const feat of extraFeatures) {
+    const featMatch = feat.match(/android:name="([^"]+)"/);
+    if (featMatch && !manifest.includes(featMatch[1])) {
+      manifest = manifest.replace('</manifest>', `    ${feat}\n</manifest>`);
+    }
+  }
+
   fs.writeFileSync(manifestPath, manifest, 'utf8');
   console.log(`[OK] Updated AndroidManifest.xml (Orientation: ${config.orientation})`);
 
@@ -525,6 +622,30 @@ public class MainActivity extends BridgeActivity {
                 view.post(() -> view.loadUrl(errorUrl));
             }
         });
+
+        handleDeepLinkIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleDeepLinkIntent(intent);
+    }
+
+    private void handleDeepLinkIntent(Intent intent) {
+        if (intent == null || intent.getData() == null) {
+            return;
+        }
+        Uri data = intent.getData();
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            WebView wv = getBridge().getWebView();
+            String url = data.toString();
+            if (shouldStayInApp(data)) {
+                wv.post(() -> wv.loadUrl(url));
+            }
+            String safeJs = "if(window.Bizgrowth360Bridge && window.Bizgrowth360Bridge.emit){window.Bizgrowth360Bridge.emit('deepLink',{url:'" + url.replace("'", "\\'") + "'});}";
+            wv.post(() -> wv.evaluateJavascript(safeJs, null));
+        }
     }
 
     private boolean isSpecialScheme(Uri url) {

@@ -36,6 +36,10 @@ class AjaxHandler {
 		add_action( 'wp_ajax_bizgrowth360_cancel_build', array( $this, 'ajax_cancel_build' ) );
 		add_action( 'wp_ajax_bizgrowth360_save_design', array( $this, 'ajax_save_design' ) );
 		add_action( 'wp_ajax_bizgrowth360_reset_design', array( $this, 'ajax_reset_design' ) );
+		add_action( 'wp_ajax_bizgrowth360_save_native_features', array( $this, 'ajax_save_native_features' ) );
+		add_action( 'wp_ajax_bizgrowth360_get_native_features', array( $this, 'ajax_get_native_features' ) );
+		add_action( 'wp_ajax_bizgrowth360_send_test_push', array( $this, 'ajax_send_test_push' ) );
+		add_action( 'wp_ajax_bizgrowth360_generate_assetlinks', array( $this, 'ajax_generate_assetlinks' ) );
 	}
 
 	private function check_permissions() {
@@ -303,6 +307,108 @@ class AjaxHandler {
 				'message'  => $section
 					? __( 'Design section reset successfully.', 'bizgrowth360-app-builder' )
 					: __( 'Entire design reset successfully.', 'bizgrowth360-app-builder' ),
+			)
+		);
+	}
+
+	/**
+	 * Persist Native Features configuration.
+	 */
+	public function ajax_save_native_features() {
+		$this->check_permissions();
+
+		$raw = isset( $_POST['features'] ) ? wp_unslash( $_POST['features'] ) : '';
+		if ( is_string( $raw ) ) {
+			$features = json_decode( $raw, true );
+		} elseif ( is_array( $raw ) ) {
+			$features = $raw;
+		} else {
+			$features = array();
+		}
+
+		if ( ! is_array( $features ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid native features payload.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		$saved  = NativeFeatures::save_features( $features );
+		$status = NativeFeatures::get_features_with_status();
+
+		wp_send_json_success(
+			array(
+				'features' => $saved,
+				'status'   => $status,
+				'message'  => __( 'Native features settings saved successfully.', 'bizgrowth360-app-builder' ),
+			)
+		);
+	}
+
+	/**
+	 * Retrieve current native features configuration, status, and device token metrics.
+	 */
+	public function ajax_get_native_features() {
+		$this->check_permissions();
+
+		wp_send_json_success(
+			array(
+				'features'     => NativeFeatures::get_features(),
+				'status'       => NativeFeatures::get_features_with_status(),
+				'tokens_count' => DeviceTokensDb::count_tokens(),
+			)
+		);
+	}
+
+	/**
+	 * Send test push notification from WordPress admin dashboard.
+	 */
+	public function ajax_send_test_push() {
+		$this->check_permissions();
+
+		$title = sanitize_text_field( wp_unslash( $_POST['title'] ?? 'Test Notification' ) );
+		$body  = sanitize_text_field( wp_unslash( $_POST['body'] ?? 'This is a test push notification from Bizgrowth360 App Builder.' ) );
+		$url   = esc_url_raw( wp_unslash( $_POST['url'] ?? home_url() ) );
+
+		$features   = NativeFeatures::get_features();
+		$server_key = $features['push_notifications']['firebase_server_key'] ?? '';
+
+		if ( empty( $server_key ) ) {
+			wp_send_json_error( array( 'message' => __( 'Firebase Server Key is not configured in Native Features > Push Notifications.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		$tokens = DeviceTokensDb::get_tokens( array( 'limit' => 10 ) );
+		if ( empty( $tokens ) ) {
+			wp_send_json_error( array( 'message' => __( 'No registered devices found. Launch your compiled app on an Android device to register an FCM device token first.', 'bizgrowth360-app-builder' ) ) );
+		}
+
+		$device_tokens = array_map( function( $t ) { return $t->token; }, $tokens );
+
+		$rest   = new RestApi();
+		$result = $rest->send_fcm_notification( $server_key, $device_tokens, $title, $body, array( 'url' => $url ) );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success(
+			array(
+				'message' => sprintf( __( 'Push notification sent to %d device(s).', 'bizgrowth360-app-builder' ), count( $device_tokens ) ),
+				'result'  => $result,
+			)
+		);
+	}
+
+	/**
+	 * Generate and preview Digital Asset Links (assetlinks.json).
+	 */
+	public function ajax_generate_assetlinks() {
+		$this->check_permissions();
+
+		$sha256 = sanitize_text_field( wp_unslash( $_POST['sha256_fingerprint'] ?? '' ) );
+		$json   = NativeFeatures::generate_assetlinks_json( $sha256 );
+
+		wp_send_json_success(
+			array(
+				'assetlinks_json' => $json,
+				'well_known_url'  => home_url( '/.well-known/assetlinks.json' ),
 			)
 		);
 	}
