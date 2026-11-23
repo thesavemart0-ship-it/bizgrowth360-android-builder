@@ -342,7 +342,7 @@ class NativeFeatures {
 		$team_id   = strtoupper( (string) ( $options['ios_team_id'] ?? '' ) );
 		$enabled   = ! empty( $features['deep_linking']['enabled'] );
 
-		if ( ! $enabled || empty( $bundle_id ) ) {
+		if ( ! $enabled || empty( $bundle_id ) || empty( $team_id ) ) {
 			return array(
 				'applinks' => array(
 					'apps'    => array(),
@@ -351,7 +351,7 @@ class NativeFeatures {
 			);
 		}
 
-		$app_id = ! empty( $team_id ) ? $team_id . '.' . $bundle_id : $bundle_id;
+		$app_id = $team_id . '.' . $bundle_id;
 
 		return array(
 			'applinks' => array(
