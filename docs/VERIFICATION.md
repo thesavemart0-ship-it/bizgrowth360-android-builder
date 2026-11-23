@@ -156,12 +156,56 @@ Strict validation after download confirmed `aapt2` package ID, launcher label `M
 
 ---
 
-## 8. Not executed in this environment
+## 8. Phase 5 — App Design Studio verification
 
-These require a physical/emulated device and are **not claimed as passing**:
+Executed on the local WordPress test site (`bg360-test`, PHP 8.2) and on GitHub Actions.
 
-- Installing the APK on an emulator/device and visually confirming the website, splash transition, back button and status bar.
-- Signing with a real production keystore (local and GitHub builds used the debug key fallback).
-- AAB-only build mode (AAB production was exercised through `both` mode).
+### Validation tests
 
-The legacy Phase 2 workflow file is preserved as a manual regression workflow.
+| Test | Result |
+| :--- | :--- |
+| `node --test tests/unit.test.js` | **34 passed, 0 failed** |
+| `php tests/php/design-config-test.php` | **35 passed, 0 failed** |
+| PHP lint, all plugin files | **no syntax errors** |
+| Local design APK build (`config/examples/design-studio.json`) | **SUCCESS** |
+| Local WordPress plugin activation | **SUCCESS** |
+
+### Local WordPress UI tests
+
+The real plugin was activated on a local WordPress installation and the Design Studio was driven through Chromium:
+
+- All 10 Design Studio sections rendered.
+- Theme preset selection changed config + live preview.
+- Header/nav/card/typography variables appeared in the preview.
+- Navigation item and homepage section add/edit operations worked.
+- Menu group and item CRUD worked.
+- Save returned success and wrote the versioned array to `wp_options`.
+- Browser reload restored the saved design (primary color, navigation item, menu items, homepage sections).
+- Autosave fired after a debounced edit and persisted to the database.
+- Discard reverted unsaved changes.
+- Section reset and full reset worked with confirmation.
+- Live Preview Home/Menu/Navigation modes worked.
+- Size selector changed the preview device size.
+- A crafted `custom_html` payload containing `<script>`, `onclick` and `javascript:` was sanitized server-side by the real plugin.
+
+### GitHub Actions design build
+
+| Item | Result |
+| :--- | :--- |
+| Regression push run `45114438708` (default config, APK + AAB) | **SUCCESS** |
+| Design dispatch run `45114615773` (Design Studio payload, APK/debug) | **SUCCESS** |
+| Artifact | `Design-Studio-Test-1.0.0-APK` |
+| Downloaded APK | `Design-Studio-Test-1.0.0-debug.apk` |
+| APK size | 4.18 MB |
+| APK SHA-256 | `31f68023dc0b4680fb4569c2180ec1ce5bf9e04deab5d129264593587bdf231e` |
+| Embedded `design.json` | 8,079 bytes, schema v1 |
+| Embedded shell config | 6 navigation items, 4 homepage sections, 5 menu items |
+| Strict APK validation | package, version, label, URL, signature, bundled runtime config all PASS |
+
+The APK was downloaded from GitHub, its web assets were extracted, and the resulting shell was loaded in Chromium: header, bottom navigation, menu drawer, hero, quick actions, products and safe custom HTML all rendered with the configured colors/typography.
+
+### Not executed
+
+- Installing the APK on a physical Android device or emulator (visual/device runtime behavior).
+- Logging into the production Hostinger WordPress admin to click the live Design Studio UI. The identical plugin code and assets were verified locally; production files were deployed and SHA-256 verified.
+- Production keystore signing (builds remain debug-signed without repository secrets).
