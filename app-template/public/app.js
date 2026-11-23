@@ -157,6 +157,7 @@
       '--bg360-card-spacing': (components.card_spacing || 12) + 'px',
       '--bg360-section-spacing': (components.section_spacing || 20) + 'px',
       '--bg360-content-width': (components.content_width || 100) + '%',
+      '--bg360-max-width': (layout.max_width || 600) + 'px',
       '--bg360-header-height': (header.height || 56) + 'px',
       '--bg360-nav-height': (layout.bottom_nav_height || 64) + 'px',
       '--bg360-page-padding': (layout.page_padding || 16) + 'px',

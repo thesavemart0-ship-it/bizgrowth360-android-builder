@@ -347,7 +347,7 @@ body.bg360-shell-active * {
 
 .bg360-section {
   width: var(--bg360-content-width);
-  max-width: 100%;
+  max-width: min(100%, var(--bg360-max-width, 600px));
   margin: 0 auto;
 }
 
