@@ -324,7 +324,7 @@ class AdminPage {
 		$build_id    = isset( $_GET['build_id'] ) ? sanitize_text_field( wp_unslash( $_GET['build_id'] ) ) : '';
 		$type        = isset( $_GET['type'] ) ? sanitize_key( $_GET['type'] ) : '';
 
-		if ( ! in_array( $type, array( '', 'apk', 'aab', 'ipa' ), true ) ) {
+		if ( ! in_array( $type, array( '', 'apk', 'aab', 'ipa', 'zip' ), true ) ) {
 			$type = '';
 		}
 
@@ -335,7 +335,8 @@ class AdminPage {
 					$is_apk = false !== stripos( $art['name'], 'apk' );
 					$is_aab = false !== stripos( $art['name'], 'aab' );
 					$is_ipa = false !== stripos( $art['name'], 'ipa' );
-					if ( ( 'apk' === $type && $is_apk ) || ( 'aab' === $type && $is_aab ) || ( 'ipa' === $type && $is_ipa ) ) {
+					$is_zip = false !== stripos( $art['name'], 'zip' );
+					if ( ( 'apk' === $type && $is_apk ) || ( 'aab' === $type && $is_aab ) || ( 'ipa' === $type && $is_ipa ) || ( 'zip' === $type && $is_zip ) || empty( $type ) ) {
 						$artifact_id = absint( $art['id'] );
 						break;
 					}

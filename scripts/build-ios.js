@@ -337,7 +337,48 @@ async function buildIos(options = {}) {
 
       summary.status = 'success';
       addCheck('Xcode simulator compilation', true, 'Compiled for the iOS Simulator without signing.');
-      addCheck('IPA export', true, (!profileName || !teamId) ? 'Skipped: configure Apple signing secrets in GitHub for signed IPA export.' : 'Skipped in validation mode by design; no IPA is claimed.');
+
+      const builtAppPath = path.join(derivedData, 'Build', 'Products', 'Debug-iphonesimulator', 'App.app');
+      if (fs.existsSync(builtAppPath)) {
+        const ipaDir = path.join(outputDir, 'ipa');
+        fs.mkdirSync(ipaDir, { recursive: true });
+        const artifactBase = buildArtifactBaseName(effective.app_name, effective.version_name);
+        const fileName = `${artifactBase}-simulator.ipa`;
+        const destination = path.join(ipaDir, fileName);
+
+        try {
+          const payloadDir = path.join(workspaceDir, 'Payload');
+          fs.mkdirSync(payloadDir, { recursive: true });
+          await runProcess('cp', ['-R', builtAppPath, path.join(payloadDir, 'App.app')], { logStream });
+          await runProcess('zip', ['-r', '-y', destination, 'Payload'], { cwd: workspaceDir, logStream });
+
+          if (fs.existsSync(destination)) {
+            const stats = fs.statSync(destination);
+            summary.artifact = {
+              artifactName: `${artifactBase}-IPA`,
+              fileName,
+              path: destination,
+              sizeBytes: stats.size,
+              sizeMb: (stats.size / (1024 * 1024)).toFixed(2) + ' MB',
+              sha256: computeSha256(destination),
+              validation: {
+                mode: 'simulator-ipa',
+                appName: effective.app_name,
+                bundleId: ios.bundle_id,
+                versionName: effective.version_name,
+                versionCode: effective.version_code
+              }
+            };
+            addCheck('Simulator IPA package', true, `Generated ${fileName} (${summary.artifact.sizeMb}).`);
+          }
+        } catch (pkgErr) {
+          console.warn(`[WARN] Could not package simulator IPA: ${pkgErr.message}`);
+          addCheck('Simulator IPA package', false, `Packaging skipped: ${pkgErr.message}`);
+        }
+      } else {
+        addCheck('IPA export', true, (!profileName || !teamId) ? 'Skipped: configure Apple signing secrets in GitHub for signed IPA export.' : 'Skipped in validation mode by design; no IPA is claimed.');
+      }
+
       summary.finishedAt = new Date().toISOString();
       return summary;
     }

@@ -538,18 +538,21 @@
 			// Granular stages
 			if (b.status === 'queued' || b.status === 'dispatching') {
 				updateBuildStatus('queued', 'Runner Queued');
+				$('#bg360-run-subtitle').text(isIOS ? 'Build queued! Awaiting Apple macOS runner allocation...' : bizgrowth360AppBuilder.strings.build_queued);
 				$('#bg360-progress-bar').css('width', '20%');
 				resetStages();
 				$('#stage-init').addClass('active');
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'preparing' || b.stage === 'setup' || b.stage === 'preparing') {
 				updateBuildStatus('in_progress', isIOS ? 'Preparing Xcode & CocoaPods' : 'Preparing SDK & Tools');
+				$('#bg360-run-subtitle').text(isIOS ? 'Setting up macOS runner, Xcode toolchain and CocoaPods dependencies...' : 'Setting up cloud runner, Android SDK and build tools...');
 				$('#bg360-progress-bar').css('width', '40%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('active');
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'building' || b.stage === 'building') {
 				updateBuildStatus('in_progress', isIOS ? 'Xcode Compile / Archive' : 'Gradle Compiling');
+				$('#bg360-run-subtitle').text(isIOS ? 'Compiling iOS Swift & Capacitor application with Xcode...' : 'Compiling Android application packages with Gradle...');
 				$('#bg360-progress-bar').css('width', '65%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('completed');
@@ -557,6 +560,7 @@
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'signing' || b.stage === 'signing') {
 				updateBuildStatus('in_progress', isIOS ? 'Apple Code Signing' : 'Keystore Signing');
+				$('#bg360-run-subtitle').text(isIOS ? 'Processing Apple code signing identity and provisioning profile...' : 'Signing release package with Android Keystore...');
 				$('#bg360-progress-bar').css('width', '82%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('completed');
@@ -565,6 +569,7 @@
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'exporting' || b.stage === 'exporting') {
 				updateBuildStatus('in_progress', isIOS ? 'Exporting Signed IPA' : 'Packaging Artifacts');
+				$('#bg360-run-subtitle').text(isIOS ? 'Exporting iOS application package and archive...' : 'Packaging APK and AAB bundle artifacts...');
 				$('#bg360-progress-bar').css('width', '92%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('completed');
@@ -574,6 +579,7 @@
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'uploading' || b.stage === 'uploading') {
 				updateBuildStatus('in_progress', 'Uploading to TestFlight');
+				$('#bg360-run-subtitle').text('Uploading iOS application package to Apple TestFlight / App Store Connect...');
 				$('#bg360-progress-bar').css('width', '96%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('completed');
@@ -590,7 +596,7 @@
 				$('#bg360-progress-bar').css('width', '100%');
 				$('.bg360-stage').removeClass('active').addClass('completed');
 
-				renderArtifacts(b.artifacts, b.build_id);
+				renderArtifacts(b.artifacts, b.build_id, b.platform);
 				loadHistory(1);
 			} else if (b.status === 'failed' || b.status === 'cancelled') {
 				stopPolling();
@@ -604,25 +610,44 @@
 		});
 	}
 
-	function renderArtifacts(artifacts, buildId) {
+	function renderArtifacts(artifacts, buildId, platform) {
 		var container = $('#bg360-artifact-cards');
 		container.empty();
 
-		if (!artifacts || artifacts.length === 0) {
-			container.html('<p>Artifacts are being processed. Click Refresh History or check back shortly.</p>');
+		var isIOS = platform === 'ios';
+		var allArtifacts = artifacts || [];
+		var appPackages = allArtifacts.filter(function (art) {
+			var n = (art.name || '').toLowerCase();
+			return n.indexOf('apk') !== -1 || n.indexOf('aab') !== -1 || n.indexOf('ipa') !== -1 || n.indexOf('simulator') !== -1;
+		});
+
+		var displayList = appPackages.length > 0 ? appPackages : allArtifacts;
+
+		if (displayList.length === 0) {
+			if (isIOS) {
+				container.html(
+					'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;color:#166534;margin-bottom:12px;">' +
+					'  <strong>✅ Xcode Compilation & Validation Succeeded!</strong>' +
+					'  <p style="margin:6px 0 0;font-size:13px;color:#15803d;">Your iOS application compiled cleanly with Xcode. To export signed IPAs for TestFlight / App Store, configure Apple Signing secrets in your GitHub repository.</p>' +
+					'</div>'
+				);
+			} else {
+				container.html('<p>Artifacts are being processed. Click Refresh History or check back shortly.</p>');
+			}
 			$('#bg360-downloads-zone').show();
 			return;
 		}
 
-		artifacts.forEach(function (art) {
+		displayList.forEach(function (art) {
 			var name = (art.name || '').toLowerCase();
 			var isApk = name.indexOf('apk') !== -1;
 			var isAab = name.indexOf('aab') !== -1;
 			var isIpa = name.indexOf('ipa') !== -1;
+			var isLog = name.indexOf('log') !== -1;
 			var typeClass = isApk ? 'apk' : (isAab ? 'aab' : (isIpa ? 'ipa' : 'zip'));
-			var typeLabel = isApk ? 'APK' : (isAab ? 'AAB' : (isIpa ? 'IPA' : 'FILE'));
-			var typeParam = isApk ? 'apk' : (isAab ? 'aab' : (isIpa ? 'ipa' : ''));
-			var detail = isApk ? 'Direct Android Install' : (isAab ? 'Google Play Console' : (isIpa ? 'TestFlight / App Store' : 'Build package'));
+			var typeLabel = isApk ? 'APK' : (isAab ? 'AAB' : (isIpa ? 'IPA' : (isLog ? 'LOGS' : 'PACKAGE')));
+			var typeParam = isApk ? 'apk' : (isAab ? 'aab' : (isIpa ? 'ipa' : 'zip'));
+			var detail = isApk ? 'Direct Android Install' : (isAab ? 'Google Play Console' : (isIpa ? 'iOS Application Package' : (isLog ? 'Build Verification Logs' : 'Build Package')));
 
 			var downloadLink = bizgrowth360AppBuilder.download_base_url +
 				'&artifact_id=' + encodeURIComponent(art.id) +
@@ -680,6 +705,17 @@
 			var bId = $(this).data('build-id');
 			if (!confirm('Retry this build using its original configuration snapshot?')) return;
 
+			updateBuildStatus('dispatching', 'Dispatching Build');
+			$('#bg360-run-subtitle').text(bizgrowth360AppBuilder.strings.triggering_build);
+			$('#bg360-progress-bar-wrap').show();
+			$('#bg360-progress-bar').css('width', '10%');
+			$('#bg360-run-meta').show();
+			$('#bg360-downloads-zone').hide();
+			$('#bg360-cancel-build-btn').show();
+			resetStages();
+			$('#stage-init').addClass('active');
+			startTimer();
+
 			$.post(bizgrowth360AppBuilder.ajax_url, {
 				action: 'bizgrowth360_retry_build',
 				nonce: bizgrowth360AppBuilder.nonce,
@@ -691,8 +727,17 @@
 					showNotice(res.data.message, 'success');
 					startPolling();
 				} else {
+					stopTimer();
+					updateBuildStatus('failed', 'Dispatch Failed');
+					$('#bg360-cancel-build-btn').hide();
 					showNotice(res.data.message || 'Retry failed.', 'error');
 				}
+			}).fail(function () {
+				stopTimer();
+				updateBuildStatus('failed', 'Dispatch Failed');
+				$('#bg360-cancel-build-btn').hide();
+				$('#bg360-run-subtitle').text(bizgrowth360AppBuilder.strings.build_failed);
+				showNotice('Network error dispatching build retry.', 'error');
 			});
 		});
 
@@ -904,8 +949,12 @@
 					activeBuildId = b.build_id;
 					startPolling();
 					startTimer(b.duration_seconds || 0);
-				} else if (b.status === 'completed' && b.artifacts && b.artifacts.length > 0) {
-					renderArtifacts(b.artifacts, b.build_id);
+				} else if (b.status === 'completed') {
+					renderArtifacts(b.artifacts, b.build_id, b.platform);
+					$('#bg360-run-subtitle').text(bizgrowth360AppBuilder.strings.build_success);
+				} else if (b.status === 'failed' || b.status === 'cancelled') {
+					updateBuildStatus(b.status, b.status === 'cancelled' ? 'Build Cancelled' : 'Build Failed');
+					$('#bg360-run-subtitle').text(b.status === 'cancelled' ? bizgrowth360AppBuilder.strings.build_cancelled : (b.error_message || bizgrowth360AppBuilder.strings.build_failed));
 				}
 			}
 			loadHistory(1);
