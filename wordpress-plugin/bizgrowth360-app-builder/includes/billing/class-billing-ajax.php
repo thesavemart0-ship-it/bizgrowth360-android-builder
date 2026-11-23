@@ -89,7 +89,7 @@ class BillingAjax {
 		$interval = sanitize_key( $_POST['interval'] ?? 'monthly' );
 		$coupon   = sanitize_text_field( wp_unslash( $_POST['coupon'] ?? '' ) );
 		$gateway  = sanitize_key( $_POST['gateway'] ?? '' );
-		$result   = Payments::create_checkout( get_current_user_id(), $plan_id, $interval, $coupon, $gateway );
+		$result   = Payments::create_checkout( Tenant::current_id(), $plan_id, $interval, $coupon, $gateway );
 		if ( empty( $result['success'] ) ) {
 			wp_send_json_error( $result, 400 );
 		}
@@ -107,7 +107,7 @@ class BillingAjax {
 			'razorpay_signature'  => sanitize_text_field( $_POST['razorpay_signature'] ?? '' ),
 			'session_id'          => sanitize_text_field( $_POST['session_id'] ?? '' ),
 		);
-		$result = Payments::verify_checkout( get_current_user_id(), $transaction_id, $payload );
+		$result = Payments::verify_checkout( Tenant::current_id(), $transaction_id, $payload );
 		if ( empty( $result['success'] ) ) {
 			wp_send_json_error( $result, 400 );
 		}
@@ -125,12 +125,12 @@ class BillingAjax {
 		if ( ! $plan ) {
 			wp_send_json_error( array( 'message' => __( 'Plan not found.', 'bizgrowth360-app-builder' ) ), 404 );
 		}
-		$result = PlanChanges::request( get_current_user_id(), $plan, $interval, $coupon );
+		$result = PlanChanges::request( Tenant::current_id(), $plan, $interval, $coupon );
 		if ( empty( $result['success'] ) ) {
 			wp_send_json_error( $result, 400 );
 		}
 		if ( ! empty( $result['needs_payment'] ) ) {
-			$checkout = Payments::create_checkout( get_current_user_id(), $plan_id, $interval, $coupon, sanitize_key( $_POST['gateway'] ?? '' ) );
+			$checkout = Payments::create_checkout( Tenant::current_id(), $plan_id, $interval, $coupon, sanitize_key( $_POST['gateway'] ?? '' ) );
 			if ( empty( $checkout['success'] ) ) {
 				wp_send_json_error( $checkout, 400 );
 			}
@@ -143,7 +143,7 @@ class BillingAjax {
 	 * Cancel current subscription.
 	 */
 	private function cancel() {
-		$subscription = Subscriptions::get_current( get_current_user_id() );
+		$subscription = Subscriptions::get_current( Tenant::current_id() );
 		if ( ! $subscription ) {
 			wp_send_json_error( array( 'message' => __( 'No subscription found.', 'bizgrowth360-app-builder' ) ), 404 );
 		}
@@ -157,7 +157,7 @@ class BillingAjax {
 	 * Resume a subscription scheduled for cancellation.
 	 */
 	private function resume() {
-		$subscription = Subscriptions::get_current( get_current_user_id() );
+		$subscription = Subscriptions::get_current( Tenant::current_id() );
 		if ( ! $subscription ) {
 			wp_send_json_error( array( 'message' => __( 'No subscription found.', 'bizgrowth360-app-builder' ) ), 404 );
 		}
@@ -176,7 +176,7 @@ class BillingAjax {
 				$data[ $field ] = wp_unslash( $_POST[ $field ] );
 			}
 		}
-		Tenant::update_profile( get_current_user_id(), $data );
+		Tenant::update_profile( Tenant::current_id(), $data );
 		wp_send_json_success( array( 'message' => __( 'Billing details saved.', 'bizgrowth360-app-builder' ) ) );
 	}
 
@@ -192,7 +192,7 @@ class BillingAjax {
 			wp_send_json_error( array( 'message' => __( 'Plan not found.', 'bizgrowth360-app-builder' ) ), 404 );
 		}
 		$price = Plans::price_for_interval( $plan, $interval );
-		$result = Coupons::validate( $code, $plan->id, get_current_user_id(), $price );
+		$result = Coupons::validate( $code, $plan->id, Tenant::current_id(), $price );
 		if ( empty( $result['valid'] ) ) {
 			wp_send_json_error( array( 'message' => $result['error'] ), 400 );
 		}

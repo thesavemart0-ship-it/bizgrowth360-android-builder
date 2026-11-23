@@ -135,8 +135,17 @@ class Tax {
 	 * @return string
 	 */
 	public static function format_money( $amount, $currency = 'INR' ) {
+		return self::symbol( $currency ) . number_format_i18n( (float) $amount, 2 );
+	}
+
+	/**
+	 * Currency symbol for a currency code.
+	 *
+	 * @param string $currency
+	 * @return string
+	 */
+	public static function symbol( $currency = 'INR' ) {
 		$symbols = array( 'INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'AED' => 'AED ' );
-		$symbol  = $symbols[ strtoupper( $currency ) ] ?? strtoupper( $currency ) . ' ';
-		return $symbol . number_format_i18n( (float) $amount, 2 );
+		return $symbols[ strtoupper( $currency ) ] ?? strtoupper( $currency ) . ' ';
 	}
 }

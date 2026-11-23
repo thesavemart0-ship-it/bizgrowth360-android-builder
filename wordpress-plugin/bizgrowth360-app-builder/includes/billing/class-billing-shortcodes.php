@@ -23,6 +23,47 @@ class BillingShortcodes {
 		add_shortcode( 'bizgrowth360_pricing', array( $this, 'render_pricing' ) );
 		add_shortcode( 'bizgrowth360_billing_dashboard', array( $this, 'render_dashboard' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'maybe_enqueue' ) );
+		add_action( 'template_redirect', array( $this, 'catch_standalone_route' ) );
+	}
+
+	/**
+	 * Standalone fallback routes so billing works even when a theme does not
+	 * render page content for the shortcode pages.
+	 */
+	public function catch_standalone_route() {
+		$pricing  = isset( $_GET['bizgrowth360_pricing'] ) || ( is_page() && (int) get_queried_object_id() === (int) get_option( 'bizgrowth360_pricing_page_id' ) );
+		$billing  = isset( $_GET['bizgrowth360_billing'] ) || ( is_page() && (int) get_queried_object_id() === (int) get_option( 'bizgrowth360_dashboard_page_id' ) );
+		if ( ! $pricing && ! $billing ) {
+			return;
+		}
+
+		status_header( 200 );
+		nocache_headers();
+		$this->enqueue_assets();
+		?>
+		<!DOCTYPE html>
+		<html <?php language_attributes(); ?>>
+		<head>
+			<meta charset="<?php bloginfo( 'charset' ); ?>">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<?php wp_head(); ?>
+		</head>
+		<body <?php body_class( 'bg360-billing-standalone' ); ?>>
+		<?php wp_body_open(); ?>
+		<main class="bg360-billing-standalone-main">
+			<?php
+			if ( $pricing ) {
+				echo $this->render_pricing(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in template.
+			} else {
+				echo $this->render_dashboard(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in template.
+			}
+			?>
+		</main>
+		<?php wp_footer(); ?>
+		</body>
+		</html>
+		<?php
+		exit;
 	}
 
 	/**
@@ -37,6 +78,13 @@ class BillingShortcodes {
 			return;
 		}
 
+		$this->enqueue_assets();
+	}
+
+	/**
+	 * Enqueue billing assets and localized checkout configuration.
+	 */
+	public function enqueue_assets() {
 		wp_enqueue_style( 'bizgrowth360-billing', BIZGROWTH360_APP_BUILDER_URL . 'assets/css/billing.css', array(), BIZGROWTH360_APP_BUILDER_VERSION );
 		wp_enqueue_script( 'bizgrowth360-billing', BIZGROWTH360_APP_BUILDER_URL . 'assets/js/billing.js', array( 'jquery' ), BIZGROWTH360_APP_BUILDER_VERSION, true );
 		wp_localize_script(
@@ -126,7 +174,7 @@ class BillingShortcodes {
 	public function render_pricing() {
 		$plans       = Plans::public_plans();
 		$tenant_id   = Tenant::current_id();
-		$current_sub = $tenant_id ? Subscriptions::get_current( $tenant_id ) : null;
+		$current_sub = $tenant_id ? Tenant::subscription( $tenant_id ) : null;
 		$current_plan = $current_sub ? Plans::get( $current_sub->plan_id ) : null;
 		$recommended = Plans::recommended_upgrade( $current_plan );
 		$tax         = Tax::get_settings();
@@ -170,7 +218,9 @@ class BillingShortcodes {
 						data-plan-id="<?php echo esc_attr( $plan->id ); ?>"
 						data-name="<?php echo esc_attr( $plan->name ); ?>"
 						data-monthly="<?php echo esc_attr( $plan->monthly_price ); ?>"
-						data-annual="<?php echo esc_attr( $plan->annual_price ); ?>">
+						data-annual="<?php echo esc_attr( $plan->annual_price ); ?>"
+						data-currency="<?php echo esc_attr( $plan->currency ); ?>"
+						data-symbol="<?php echo esc_attr( Tax::symbol( $plan->currency ) ); ?>">
 						<?php if ( $is_current ) : ?>
 							<span class="bg360-plan-badge"><?php esc_html_e( 'Current plan', 'bizgrowth360-app-builder' ); ?></span>
 						<?php elseif ( $is_recommended ) : ?>
@@ -268,8 +318,12 @@ class BillingShortcodes {
 			return '<div class="bg360-billing-wrap"><p>' . esc_html__( 'Please sign in to view your subscription.', 'bizgrowth360-app-builder' ) . ' <a href="' . esc_url( wp_login_url( get_permalink() ) ) . '">' . esc_html__( 'Sign in', 'bizgrowth360-app-builder' ) . '</a></p></div>';
 		}
 
-		$tenant_id    = get_current_user_id();
-		$subscription = Subscriptions::get_current( $tenant_id );
+		$tenant_id    = Tenant::current_id();
+		if ( ! $tenant_id ) {
+			return '<div class="bg360-billing-wrap"><p>' . esc_html__( 'No workspace is assigned to this account. Please contact support.', 'bizgrowth360-app-builder' ) . '</p></div>';
+		}
+		Tenant::ensure_profile( $tenant_id );
+		$subscription = Tenant::subscription( $tenant_id );
 		$plan         = $subscription ? Plans::get( $subscription->plan_id ) : null;
 		$summary      = Usage::summary( $tenant_id );
 		$profile      = Tenant::get_profile( $tenant_id );

@@ -3,8 +3,9 @@
  * Billing dashboard metrics with explicit calculation rules.
  *
  * Revenue = successful payments minus refunds in the selected date range.
- * MRR = normalized monthly value of active/grace/past-due subscriptions:
+ * MRR = normalized monthly value of paid active/grace/past-due subscriptions:
  * monthly plans use the monthly amount; annual plans use annual amount / 12.
+ * Manually granted/comped subscriptions are excluded from MRR.
  * ARR here is an annualized run rate (MRR x 12), not contracted annual value.
  *
  * @package Bizgrowth360\AppBuilder
@@ -89,7 +90,7 @@ class Metrics {
 	public static function mrr() {
 		global $wpdb;
 		$rows = $wpdb->get_results(
-			"SELECT billing_interval, amount FROM " . BillingDb::table( 'subscriptions' ) . " WHERE status IN ('active','grace','past_due')"
+			"SELECT billing_interval, amount FROM " . BillingDb::table( 'subscriptions' ) . " WHERE status IN ('active','grace','past_due') AND gateway NOT IN ('manual','trial')"
 		);
 		$mrr = 0.0;
 		foreach ( $rows ? $rows : array() as $row ) {

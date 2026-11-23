@@ -353,7 +353,7 @@ class BillingAdmin {
 					);
 					foreach ( $checks as $key => $label ) {
 						$checked = $edit ? ! empty( $edit->$key ) : false;
-						echo '<div class="bg360-billing-field"><label><input type="checkbox" name="plan[' . esc_attr( $key ) . ']" value="1" ' . checked( $checked, true, false ) . ' /> ' . esc_html( $label ) . '</label></div>';
+						echo '<div class="bg360-billing-field"><label><input type="checkbox" style="width:16px;height:16px;" name="plan[' . esc_attr( $key ) . ']" value="1" ' . checked( $checked, true, false ) . ' /> ' . esc_html( $label ) . '</label></div>';
 					}
 					?>
 				</div>

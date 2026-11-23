@@ -219,10 +219,7 @@ class Usage {
 	 */
 	public static function record_outcome( $tenant_id, $build_id, $status, $platform, $build_type ) {
 		$status = sanitize_key( $status );
-		$metric = 'build_' . ( in_array( $status, array( 'failed', 'cancelled', 'success' ), true ) ? $status : 'failed' );
-		if ( 'success' === $status ) {
-			$metric = 'build_success';
-		}
+		$metric = 'completed' === $status || 'success' === $status ? 'build_success' : ( 'cancelled' === $status ? 'build_cancelled' : 'build_failed' );
 		self::record(
 			$tenant_id,
 			$metric,
@@ -231,14 +228,16 @@ class Usage {
 			array( 'build_id' => $build_id, 'meta' => array( 'platform' => $platform, 'build_type' => $build_type ) )
 		);
 
-		$type_metric = 'ios' === $platform ? 'build_ipa' : ( 'apk' === $build_type ? 'build_apk' : ( 'aab' === $build_type ? 'build_aab' : 'build_apk' ) );
-		self::record(
-			$tenant_id,
-			$type_metric,
-			1,
-			'build_type:' . $build_id . ':' . $type_metric,
-			array( 'build_id' => $build_id, 'meta' => array( 'platform' => $platform, 'build_type' => $build_type ) )
-		);
+		$type_metrics = 'ios' === $platform ? array( 'build_ipa' ) : ( 'both' === $build_type ? array( 'build_apk', 'build_aab' ) : array( 'apk' === $build_type ? 'build_apk' : 'build_aab' ) );
+		foreach ( $type_metrics as $type_metric ) {
+			self::record(
+				$tenant_id,
+				$type_metric,
+				1,
+				'build_type:' . $build_id . ':' . $type_metric,
+				array( 'build_id' => $build_id, 'meta' => array( 'platform' => $platform, 'build_type' => $build_type ) )
+			);
+		}
 	}
 
 	/**
@@ -273,12 +272,10 @@ class Usage {
 	public static function active_builds( $tenant_id ) {
 		global $wpdb;
 		$table = $wpdb->prefix . 'bg360_builds';
-		$has_tenant = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", 'tenant_id' ) );
-		$where = $has_tenant ? 'tenant_id = %d' : 'created_by = %d';
 		return (int) $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT COUNT(*) FROM {$table}
-				 WHERE {$where}
+				 WHERE workspace_id = %d
 				 AND status IN ('queued','dispatching','starting','preparing','building','signing','exporting','uploading','in_progress')",
 				absint( $tenant_id )
 			)
@@ -301,11 +298,9 @@ class Usage {
 		}
 
 		$table = $wpdb->prefix . 'bg360_builds';
-		$has_tenant = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", 'tenant_id' ) );
-		$where = $has_tenant ? 'tenant_id = %d' : 'created_by = %d';
 		$rows  = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT artifacts FROM {$table} WHERE {$where} AND artifacts IS NOT NULL AND artifacts <> ''",
+				"SELECT artifacts FROM {$table} WHERE workspace_id = %d AND artifacts IS NOT NULL AND artifacts <> ''",
 				$tenant_id
 			)
 		);
@@ -389,6 +384,7 @@ class Usage {
 		if ( (int) $limit < 0 ) {
 			return -1;
 		}
-		return max( 0, (float) $limit - (float) $used );
+		$remaining = max( 0, (float) $limit - (float) $used );
+		return floor( $remaining ) === $remaining ? (int) $remaining : $remaining;
 	}
 }

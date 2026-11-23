@@ -457,7 +457,7 @@ class SaasDb {
 			'splash_image'         => esc_url_raw( $data['splash_image'] ?? '' ),
 			'allow_external_links' => ! empty( $data['allow_external_links'] ) ? 1 : 0,
 			'show_status_bar'      => ! empty( $data['show_status_bar'] ) ? 1 : 0,
-			'orientation'          => in_array( $data['orientation'] ?? 'portrait', array( 'portrait', 'landscape', 'sensor' ), true ) ? $data['orientation'] : 'portrait',
+			'orientation'          => in_array( $data['orientation'] ?? 'portrait', array( 'portrait', 'landscape', 'sensor' ), true ) ? ( $data['orientation'] ?? 'portrait' ) : 'portrait',
 			'config_json'          => isset( $data['config_json'] ) ? ( is_string( $data['config_json'] ) ? $data['config_json'] : wp_json_encode( $data['config_json'] ) ) : null,
 			'design_json'          => isset( $data['design_json'] ) ? ( is_string( $data['design_json'] ) ? $data['design_json'] : wp_json_encode( $data['design_json'] ) ) : null,
 			'features_json'        => isset( $data['features_json'] ) ? ( is_string( $data['features_json'] ) ? $data['features_json'] : wp_json_encode( $data['features_json'] ) ) : null,

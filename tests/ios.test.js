@@ -56,7 +56,7 @@ function createProjectFixture(label = 'ios') {
       const rel = path.relative(TEMPLATE, src);
       if (!rel) return true;
       const parts = rel.split(path.sep);
-      if (parts.includes('node_modules') || parts.includes('.git') || parts.includes('build') || parts.includes('Pods')) {
+      if (parts.includes('node_modules') || parts.includes('.git') || parts.includes('build') || parts.includes('Pods') || parts.includes('.gradle')) {
         return false;
       }
       return true;

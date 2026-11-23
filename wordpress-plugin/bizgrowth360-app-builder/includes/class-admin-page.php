@@ -1088,7 +1088,7 @@ class AdminPage {
 						</div>
 
 						<p class="bg360-preview-note">
-							<?php esc_html_e( 'Live preview uses the current unsaved settings. The app header, menu and homepage render in the native app shell; pages you open from the website keep the websiteâ€™s own layout.', 'bizgrowth360-app-builder' ); ?>
+							<?php esc_html_e( 'Live preview uses the current unsaved settings. The app header, menu and homepage render in the native app shell; pages you open from the website keep the website\'s own layout.', 'bizgrowth360-app-builder' ); ?>
 						</p>
 					</aside>
 				</div>
@@ -1162,7 +1162,7 @@ class AdminPage {
 								<span class="dashicons dashicons-bell bg360-card-icon"></span>
 								<div>
 									<h4><?php esc_html_e( 'Push Notifications (FCM)', 'bizgrowth360-app-builder' ); ?></h4>
-									<p class="description"><?php esc_html_e( 'Deliver real-time alerts and promotions directly to usersâ€™ Android devices using Firebase Cloud Messaging.', 'bizgrowth360-app-builder' ); ?></p>
+									<p class="description"><?php esc_html_e( 'Deliver real-time alerts and promotions directly to users\' Android devices using Firebase Cloud Messaging.', 'bizgrowth360-app-builder' ); ?></p>
 								</div>
 							</div>
 							<label class="bg360-switch">

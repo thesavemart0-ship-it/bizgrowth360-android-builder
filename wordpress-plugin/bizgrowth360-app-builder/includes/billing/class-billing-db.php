@@ -312,6 +312,7 @@ class BillingDb {
 		}
 
 		$existing = $wpdb->get_col( "SHOW COLUMNS FROM {$table}", 0 );
+		$status_was_missing = ! in_array( 'status', $existing, true );
 		$columns  = array(
 			'description'           => 'text NULL',
 			'monthly_price'         => 'decimal(12,2) NOT NULL DEFAULT 0.00',
@@ -348,8 +349,11 @@ class BillingDb {
 		$wpdb->query( "UPDATE {$table} SET price = monthly_price WHERE price = 0 AND monthly_price > 0" );
 		$wpdb->query( "UPDATE {$table} SET monthly_builds = max_builds_per_month WHERE monthly_builds = 0 AND max_builds_per_month > 0" );
 		$wpdb->query( "UPDATE {$table} SET max_builds_per_month = monthly_builds WHERE max_builds_per_month = 0 AND monthly_builds > 0" );
-		$wpdb->query( "UPDATE {$table} SET status = IF(is_active = 1, 'active', 'inactive') WHERE status = '' OR status IS NULL" );
-		$wpdb->query( "UPDATE {$table} SET is_active = IF(status = 'active', 1, 0)" );
+		if ( $status_was_missing ) {
+			$wpdb->query( "UPDATE {$table} SET status = IF(is_active = 1, 'active', 'inactive')" );
+		} else {
+			$wpdb->query( "UPDATE {$table} SET is_active = IF(status = 'active', 1, 0)" );
+		}
 	}
 
 	/**

@@ -4,7 +4,7 @@ A configuration-driven build engine that turns one reusable **Capacitor** templa
 
 Android builds use Gradle on `ubuntu-latest`. iOS builds use Xcode and CocoaPods on a macOS runner. Both share the same app configuration, Design Studio, native features, build history and WordPress integration.
 
-See [docs/BUILD.md](docs/BUILD.md), [docs/ASSETS.md](docs/ASSETS.md), [docs/NATIVE_FEATURES.md](docs/NATIVE_FEATURES.md) and [docs/IOS_BUILD.md](docs/IOS_BUILD.md).
+See [docs/BUILD.md](docs/BUILD.md), [docs/ASSETS.md](docs/ASSETS.md), [docs/NATIVE_FEATURES.md](docs/NATIVE_FEATURES.md), [docs/IOS_BUILD.md](docs/IOS_BUILD.md) and [docs/BILLING.md](docs/BILLING.md).
 
 ---
 
@@ -67,6 +67,14 @@ release.
 iOS artifacts are named dynamically, for example:
 
 - `Mahankali-Store-1.0.0-app-store.ipa`
+
+### SaaS billing
+
+The plugin includes a workspace-based subscription engine with plans, Razorpay
+and Stripe adapters, signed webhooks, invoices, GST/tax configuration, coupons,
+upgrades/downgrades, grace periods, quota enforcement and customer/admin billing
+dashboards. See [docs/BILLING.md](docs/BILLING.md) for gateway constants, webhook
+setup, lifecycle rules and testing.
 
 ### Local
 

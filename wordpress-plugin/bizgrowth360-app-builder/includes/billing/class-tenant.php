@@ -184,11 +184,24 @@ class Tenant {
 			// Keep manually managed subscriptions aligned with an admin workspace
 			// plan change while preserving gateway-managed subscriptions.
 			$workspace = self::workspace( $workspace_id );
-			if ( $workspace && 'manual' === $subscription->gateway && (int) $workspace->plan_id !== (int) $subscription->plan_id ) {
+			if ( $workspace && 'manual' === $subscription->gateway ) {
 				$plan = Plans::get( $workspace->plan_id );
 				if ( $plan ) {
-					Subscriptions::change_plan( $subscription->id, $plan, $subscription->billing_interval, true );
-					$subscription = Subscriptions::get_current( $workspace_id );
+					$expected_amount = Plans::price_for_interval( $plan, $subscription->billing_interval );
+					if ( (int) $workspace->plan_id !== (int) $subscription->plan_id
+						|| abs( (float) $subscription->amount - (float) $expected_amount ) > 0.001
+						|| strtoupper( $subscription->currency ) !== strtoupper( $plan->currency ) ) {
+						Subscriptions::update(
+							$subscription->id,
+							array(
+								'plan_id'  => $plan->id,
+								'amount'   => $expected_amount,
+								'currency' => $plan->currency,
+							),
+							array( 'status' => $subscription->status, 'reason' => 'plan_sync' )
+						);
+						$subscription = Subscriptions::get_current( $workspace_id );
+					}
 				}
 			}
 			return $subscription;

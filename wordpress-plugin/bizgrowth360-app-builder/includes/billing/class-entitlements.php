@@ -54,6 +54,13 @@ class Entitlements {
 	 * @return true|\WP_Error
 	 */
 	public static function assert_access( $tenant_id ) {
+		$workspace = Tenant::workspace( $tenant_id );
+		if ( ! $workspace ) {
+			return new \WP_Error( 'workspace_required', __( 'No workspace is assigned to this account.', 'bizgrowth360-app-builder' ) );
+		}
+		if ( 'suspended' === $workspace->status ) {
+			return new \WP_Error( 'workspace_suspended', __( 'Your workspace is suspended by platform administration.', 'bizgrowth360-app-builder' ) );
+		}
 		$subscription = self::subscription( $tenant_id );
 		if ( ! $subscription ) {
 			return new \WP_Error( 'subscription_required', __( 'An active subscription is required. Choose a plan to continue.', 'bizgrowth360-app-builder' ) );
@@ -221,7 +228,7 @@ class Entitlements {
 	 * @param string $app_name
 	 * @param string $package_id
 	 * @param string $website_url
-	 * @return true|\WP_Error
+	 * @return int|\WP_Error Application ID or error.
 	 */
 	public static function assert_can_use_app( $tenant_id, $app_name, $package_id, $website_url = '' ) {
 		$access = self::assert_access( $tenant_id );

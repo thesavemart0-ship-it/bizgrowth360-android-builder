@@ -42,7 +42,6 @@ class BuildDb {
 			parent_build_id varchar(64) DEFAULT NULL,
 			app_name varchar(255) NOT NULL,
 			package_id varchar(255) NOT NULL,
-			tenant_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			platform varchar(16) NOT NULL DEFAULT 'android',
 			ios_bundle_id varchar(255) DEFAULT NULL,
 			ios_export_method varchar(20) DEFAULT NULL,
@@ -72,15 +71,11 @@ class BuildDb {
 			KEY run_id (run_id),
 			KEY app_name (app_name(191)),
 			KEY package_id (package_id(191)),
-			KEY tenant_id (tenant_id),
 			KEY created_at (created_at)
 		) $charset_collate;";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
-
-		// Non-destructive backfill for existing single-workspace builds.
-		$wpdb->query( "UPDATE {$table_name} SET tenant_id = created_by WHERE tenant_id = 0 AND created_by > 0" );
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 	}
@@ -101,7 +96,6 @@ class BuildDb {
 			'parent_build_id'  => null,
 			'app_name'         => '',
 			'package_id'       => '',
-			'tenant_id'        => get_current_user_id(),
 			'platform'         => 'android',
 			'ios_bundle_id'    => '',
 			'ios_export_method' => '',
@@ -144,7 +138,6 @@ class BuildDb {
 				'%s', // parent_build_id
 				'%s', // app_name
 				'%s', // package_id
-				'%d', // tenant_id
 				'%s', // platform
 				'%s', // ios_bundle_id
 				'%s', // ios_export_method
@@ -218,6 +211,21 @@ class BuildDb {
 			);
 		}
 
+		return self::format_row( $row );
+	}
+
+	/**
+	 * Retrieve a single build by numeric record ID.
+	 *
+	 * @param int $id
+	 * @return object|null
+	 */
+	public static function get_build_by_id( $id ) {
+		global $wpdb;
+		$table = self::get_table_name();
+		$row   = $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d LIMIT 1", absint( $id ) )
+		);
 		return self::format_row( $row );
 	}
 

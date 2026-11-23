@@ -654,13 +654,13 @@ class Payments {
 				'type'              => 'refund',
 				'status'            => 'succeeded',
 				'gateway'           => $transaction->gateway,
-				'gateway_payment_id'=> $transaction->gateway_payment_id,
+				'gateway_payment_id'=> null,
 				'gateway_refund_id' => $refund_id,
 				'gateway_event_id'  => $event_id,
 				'amount'            => $amount,
 				'currency'          => $transaction->currency,
 				'idempotency_key'   => 'refund:' . $refund_id,
-				'meta'              => array( 'original_transaction_id' => $transaction->id, 'reason' => 'refund' ),
+				'meta'              => array( 'original_transaction_id' => $transaction->id, 'original_payment_id' => $transaction->gateway_payment_id, 'reason' => 'refund' ),
 			)
 		);
 		if ( ! is_wp_error( $refund_tx ) ) {

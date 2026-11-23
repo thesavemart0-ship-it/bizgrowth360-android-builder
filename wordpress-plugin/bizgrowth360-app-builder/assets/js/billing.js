@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Bizgrowth360 billing pricing, checkout and subscription dashboard.
  */
 (function ($) {
@@ -13,11 +13,12 @@
 		annual: 0,
 		mode: 'subscribe',
 		discount: 0,
-		coupon: ''
+		coupon: '',
+		symbol: B.currency_symbol || '₹'
 	};
 
-	function money(amount) {
-		var symbol = B.currency_symbol || 'â‚¹';
+	function money(amount, symbol) {
+		symbol = symbol || state.symbol || B.currency_symbol || '₹';
 		return symbol + Number(amount || 0).toFixed(2);
 	}
 
@@ -38,9 +39,9 @@
 		var price = priceForInterval();
 		var discount = Math.min(Number(state.discount || 0), price);
 		var total = Math.max(0, price - discount);
-		$('#bg360-checkout-subtotal').text(money(price));
-		$('#bg360-checkout-discount').text('-' + money(discount));
-		$('#bg360-checkout-total').text(money(total));
+		$('#bg360-checkout-subtotal').text(money(price, state.symbol));
+		$('#bg360-checkout-discount').text('-' + money(discount, state.symbol));
+		$('#bg360-checkout-total').text(money(total, state.symbol));
 		$('#bg360-checkout-interval').text(state.interval === 'annual' ? B.strings.annual : B.strings.monthly);
 		$('#bg360-checkout-plan').text(state.planName);
 	}
@@ -51,7 +52,7 @@
 		$('.bg360-plan-card').each(function () {
 			var card = $(this);
 			var price = state.interval === 'annual' ? card.data('annual') : card.data('monthly');
-			card.find('.bg360-plan-price .amount').text(money(price));
+			card.find('.bg360-plan-price .amount').text(money(price, card.data('symbol')));
 			card.find('.bg360-plan-price small').text(state.interval === 'annual' ? B.strings.per_year : B.strings.per_month);
 		});
 		if ($('#bg360-checkout-modal').hasClass('is-open')) {
@@ -69,6 +70,7 @@
 		if (!card.length) return;
 		state.planId = Number(planId);
 		state.planName = String(card.data('name') || '');
+		state.symbol = String(card.data('symbol') || B.currency_symbol || '₹');
 		state.monthly = Number(card.data('monthly') || 0);
 		state.annual = Number(card.data('annual') || 0);
 		state.mode = mode || 'subscribe';

@@ -188,6 +188,7 @@ class Plans {
 		}
 		$data = array(
 			'status'     => $status,
+			'is_active'  => 'active' === $status ? 1 : 0,
 			'updated_at' => BillingDb::now(),
 		);
 		if ( 'archived' === $status ) {
@@ -451,7 +452,7 @@ class Plans {
 		$table = BillingDb::table( 'plans' );
 		$rows  = $wpdb->get_results( "SELECT * FROM {$table}" );
 		foreach ( $rows ? $rows : array() as $row ) {
-			if ( (float) $row->monthly_price > 0 || (float) $row->annual_price > 0 || (int) $row->monthly_builds > 0 ) {
+			if ( ! empty( $row->updated_at ) ) {
 				continue;
 			}
 			$slug = $row->slug;

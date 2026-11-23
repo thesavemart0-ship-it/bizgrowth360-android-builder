@@ -410,6 +410,9 @@ class Subscriptions {
 				$data['amount']                   = Plans::price_for_interval( $pending, $data['billing_interval'] );
 				$data['pending_plan_id']          = null;
 				$data['pending_billing_interval'] = '';
+				if ( class_exists( '\Bizgrowth360\AppBuilder\SaasDb' ) ) {
+					\Bizgrowth360\AppBuilder\SaasDb::update_workspace( $subscription->tenant_id, array( 'plan_id' => $pending->id ) );
+				}
 			}
 		}
 

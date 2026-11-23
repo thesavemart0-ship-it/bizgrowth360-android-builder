@@ -195,6 +195,10 @@ class CustomerPortal {
 						<span class="dashicons dashicons-admin-generic"></span>
 						<span><?php esc_html_e( 'Workspace Settings', 'bizgrowth360-app-builder' ); ?></span>
 					</a>
+					<a href="<?php echo esc_url( \Bizgrowth360\AppBuilder\Billing\BillingShortcodes::dashboard_url() ); ?>" class="bg360-nav-item">
+						<span class="dashicons dashicons-money-alt"></span>
+						<span><?php esc_html_e( 'Billing & Invoices', 'bizgrowth360-app-builder' ); ?></span>
+					</a>
 				</nav>
 
 				<div class="bg360-portal-user-footer">
@@ -329,7 +333,8 @@ class CustomerPortal {
 											<li><span class="dashicons dashicons-yes"></span> <?php esc_html_e( 'Firebase Push Notifications & Deep Linking', 'bizgrowth360-app-builder' ); ?></li>
 										</ul>
 										<div class="bg360-plan-cta">
-											<p class="description"><?php esc_html_e( 'Need higher build limits or white-label services? Contact platform sales.', 'bizgrowth360-app-builder' ); ?></p>
+											<p class="description"><?php esc_html_e( 'Need higher build limits or white-label services? View plans and upgrade securely.', 'bizgrowth360-app-builder' ); ?></p>
+											<a class="button button-primary" href="<?php echo esc_url( \Bizgrowth360\AppBuilder\Billing\BillingShortcodes::pricing_url() ); ?>"><?php esc_html_e( 'View plans & upgrade', 'bizgrowth360-app-builder' ); ?></a>
 										</div>
 									</div>
 								</div>
@@ -800,6 +805,14 @@ class CustomerPortal {
 			'orientation'          => in_array( $_POST['orientation'] ?? 'portrait', array( 'portrait', 'landscape', 'sensor' ), true ) ? $_POST['orientation'] : 'portrait',
 		);
 
+		$branding_check = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_branding_allowed(
+			$workspace->id,
+			array( 'icon_url' => $data['app_icon'], 'splash_url' => $data['splash_image'] )
+		);
+		if ( is_wp_error( $branding_check ) ) {
+			wp_send_json_error( array( 'message' => $branding_check->get_error_message(), 'code' => $branding_check->get_error_code() ), 403 );
+		}
+
 		if ( $app_id > 0 ) {
 			// Update existing: Check tenant ownership!
 			$app_access = TenantManager::validate_app_access( $app_id );
@@ -890,6 +903,29 @@ class CustomerPortal {
 			wp_send_json_error( array( 'message' => $can_build->get_error_message() ), 403 );
 		}
 
+		$features = json_decode( $app->features_json ?? '{}', true ) ?: array();
+		$design   = json_decode( $app->design_json ?? '{}', true ) ?: array();
+		$billing_config = array(
+			'icon_url'   => $app->app_icon,
+			'splash_url' => $app->splash_image,
+		);
+		$billing_check = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_can_start_build( $workspace->id, 'android', $target, $billing_config );
+		if ( is_wp_error( $billing_check ) ) {
+			wp_send_json_error( array( 'message' => $billing_check->get_error_message(), 'code' => $billing_check->get_error_code() ), 403 );
+		}
+		$native_check = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_native_features( $workspace->id, $features );
+		if ( is_wp_error( $native_check ) ) {
+			wp_send_json_error( array( 'message' => $native_check->get_error_message(), 'code' => $native_check->get_error_code() ), 403 );
+		}
+		$design_check = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_design( $workspace->id, $design );
+		if ( is_wp_error( $design_check ) ) {
+			wp_send_json_error( array( 'message' => $design_check->get_error_message(), 'code' => $design_check->get_error_code() ), 403 );
+		}
+		$app_check = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_can_use_app( $workspace->id, $app->app_name, $app->package_id, $app->website_url );
+		if ( is_wp_error( $app_check ) ) {
+			wp_send_json_error( array( 'message' => $app_check->get_error_message(), 'code' => $app_check->get_error_code() ), 403 );
+		}
+
 		// Construct build payload with tenant ownership
 		$build_data = array(
 			'workspace_id'    => $workspace->id,
@@ -931,42 +967,55 @@ class CustomerPortal {
 			wp_send_json_error( array( 'message' => __( 'Failed to initialize build request in database.', 'bizgrowth360-app-builder' ) ) );
 		}
 
-		// Fetch the full build record
 		$created_build = BuildDb::get_build_by_id( $record_id );
+		$reserve = \Bizgrowth360\AppBuilder\Billing\Usage::reserve_build( $workspace->id, $created_build->build_id, array( 'platform' => 'android', 'build_type' => $target, 'app_id' => $app->id ) );
+		if ( is_wp_error( $reserve ) ) {
+			BuildDb::update_build(
+				$created_build->build_id,
+				array( 'status' => 'failed', 'stage' => 'quota', 'error_message' => $reserve->get_error_message(), 'completed_at' => current_time( 'mysql' ) )
+			);
+			wp_send_json_error( array( 'message' => $reserve->get_error_message(), 'code' => $reserve->get_error_code() ), 403 );
+		}
 
 		// Dispatch via GitHub Actions Client
-		$github_client = new GitHubClient();
+		$github_client = new GitHubClient( new Settings() );
 		$dispatched    = $github_client->dispatch_build(
-			$created_build->build_id,
-			$app->app_name,
-			$app->package_id,
-			$app->website_url,
-			$app->version_name,
-			(string) $app->version_code,
-			$target,
-			'release',
-			$app->primary_color,
-			$app->app_icon,
-			$app->splash_image,
-			$app->orientation,
-			$app->allow_external_links ? 'true' : 'false',
-			$app->show_status_bar ? 'true' : 'false',
-			$app->design_json,
-			$app->features_json
+			array(
+				'app_name'                => $app->app_name,
+				'package_id'              => $app->package_id,
+				'website_url'             => $app->website_url,
+				'version_name'            => $app->version_name,
+				'version_code'            => (string) $app->version_code,
+				'build_type'              => 'release',
+				'build_variant'           => 'release',
+				'build_target'            => $target,
+				'primary_color'           => $app->primary_color,
+				'background_color'        => $app->background_color,
+				'icon_url'                => $app->app_icon,
+				'splash_url'              => $app->splash_image,
+				'orientation'             => $app->orientation,
+				'allow_external_links'    => $app->allow_external_links ? 'true' : 'false',
+				'enable_status_bar'       => $app->show_status_bar ? 'true' : 'false',
+				'design_json'             => $app->design_json,
+				'features_json'           => $app->features_json,
+				'config_file'             => 'config/default-app.json',
+			)
 		);
 
-		if ( is_wp_error( $dispatched ) ) {
+		if ( is_wp_error( $dispatched ) || empty( $dispatched['success'] ) ) {
+			\Bizgrowth360\AppBuilder\Billing\Usage::release_build( $workspace->id, $created_build->build_id );
+			$dispatch_message = is_wp_error( $dispatched ) ? $dispatched->get_error_message() : ( $dispatched['message'] ?? __( 'Build dispatch failed.', 'bizgrowth360-app-builder' ) );
 			BuildDb::update_build(
 				$created_build->build_id,
 				array(
 					'status'        => 'failed',
 					'stage'         => 'dispatch_error',
-					'error_message' => $dispatched->get_error_message(),
+					'error_message' => $dispatch_message,
 					'completed_at'  => current_time( 'mysql' ),
 				)
 			);
 			SaasDb::log_usage( $workspace->id, 'build_failed', 1, array( 'build_id' => $created_build->build_id, 'app_id' => $app->id ) );
-			wp_send_json_error( array( 'message' => __( 'Failed to dispatch workflow to cloud builder: ', 'bizgrowth360-app-builder' ) . $dispatched->get_error_message() ) );
+			wp_send_json_error( array( 'message' => __( 'Failed to dispatch workflow to cloud builder: ', 'bizgrowth360-app-builder' ) . $dispatch_message ) );
 		}
 
 		BuildDb::update_build(
@@ -1000,6 +1049,11 @@ class CustomerPortal {
 			}
 		} else {
 			$build = BuildDb::get_active_build( $workspace->id );
+		}
+
+		if ( $build && in_array( $build->status, array( 'completed', 'failed', 'cancelled' ), true ) ) {
+			\Bizgrowth360\AppBuilder\Billing\Usage::record_outcome( $workspace->id, $build->build_id, $build->status, $build->platform ?? 'android', $build->build_type ?? 'both' );
+			\Bizgrowth360\AppBuilder\Billing\Usage::clear_storage_cache( $workspace->id );
 		}
 
 		wp_send_json_success( array( 'build' => $build ) );

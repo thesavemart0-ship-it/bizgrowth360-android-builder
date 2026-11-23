@@ -223,7 +223,7 @@ class Invoices {
 		if ( ! $invoice ) {
 			wp_die( esc_html__( 'Invoice not found.', 'bizgrowth360-app-builder' ), 404 );
 		}
-		if ( ! current_user_can( 'manage_options' ) && (int) get_current_user_id() !== (int) $invoice->tenant_id ) {
+		if ( ! current_user_can( 'manage_options' ) && (int) Tenant::current_id() !== (int) $invoice->tenant_id ) {
 			wp_die( esc_html__( 'You are not allowed to download this invoice.', 'bizgrowth360-app-builder' ), 403 );
 		}
 

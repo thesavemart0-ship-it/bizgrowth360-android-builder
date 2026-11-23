@@ -3,7 +3,7 @@
  * Plugin Name:       Bizgrowth360 App Builder
  * Plugin URI:        https://www.bizgrowth360.in
  * Description:       Build real Android APK/AAB and iOS IPA packages for your WordPress website directly from your admin dashboard using GitHub Actions.
- * Version:           1.2.0
+ * Version:           1.3.1
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Bizgrowth360
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'BIZGROWTH360_APP_BUILDER_VERSION', '1.2.0' );
+define( 'BIZGROWTH360_APP_BUILDER_VERSION', '1.3.1' );
 define( 'BIZGROWTH360_APP_BUILDER_PATH', plugin_dir_path( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_URL', plugin_dir_url( __FILE__ ) );
 define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
@@ -42,6 +42,28 @@ require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-build-manager.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-ajax-handler.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-admin-page.php';
 
+// Billing module (Phase 9)
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-billing-db.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-plans.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-tenant.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-subscriptions.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-apps.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-usage.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-entitlements.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-tax.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-coupons.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-gateways.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-invoices.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-notifications.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-payments.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-plan-changes.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-metrics.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-cron.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-billing-rest.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-billing-ajax.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-billing-shortcodes.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/billing/class-billing-admin.php';
+
 /**
  * Main plugin bootstrap function.
  */
@@ -63,6 +85,18 @@ function bizgrowth360_app_builder_init() {
 	\Bizgrowth360\AppBuilder\SaasAuth::init();
 	\Bizgrowth360\AppBuilder\CustomerPortal::init();
 
+	// Billing services
+	$billing_cron       = new \Bizgrowth360\AppBuilder\Billing\Cron();
+	$billing_rest       = new \Bizgrowth360\AppBuilder\Billing\BillingRest();
+	$billing_ajax       = new \Bizgrowth360\AppBuilder\Billing\BillingAjax();
+	$billing_shortcodes = new \Bizgrowth360\AppBuilder\Billing\BillingShortcodes();
+	$billing_admin      = new \Bizgrowth360\AppBuilder\Billing\BillingAdmin();
+	$billing_cron->init();
+	$billing_rest->init();
+	$billing_ajax->init();
+	$billing_shortcodes->init();
+	$billing_admin->init();
+
 	// Flush the /.well-known/* rules and /app-portal once per plugin version on init action
 	add_action( 'init', function() {
 		if ( get_option( 'bizgrowth360_rewrite_version' ) !== BIZGROWTH360_APP_BUILDER_VERSION ) {
@@ -83,6 +117,9 @@ function bizgrowth360_app_builder_init() {
 			\Bizgrowth360\AppBuilder\SaasDb::install_tables();
 		}
 	}
+
+	// Billing schema depends on the SaaS workspace/app/build tables.
+	\Bizgrowth360\AppBuilder\Billing\BillingDb::maybe_upgrade();
 }
 add_action( 'plugins_loaded', 'bizgrowth360_app_builder_init' );
 
@@ -96,6 +133,13 @@ function bizgrowth360_app_builder_activate() {
 	\Bizgrowth360\AppBuilder\DeviceTokensDb::install_table();
 	\Bizgrowth360\AppBuilder\SaasRoles::register_roles();
 	\Bizgrowth360\AppBuilder\SaasDb::install_tables();
+	\Bizgrowth360\AppBuilder\Billing\BillingDb::install();
+	\Bizgrowth360\AppBuilder\Billing\Plans::seed_defaults();
+	\Bizgrowth360\AppBuilder\Billing\Subscriptions::ensure_workspaces();
+	\Bizgrowth360\AppBuilder\Billing\BillingShortcodes::ensure_pages();
+	if ( ! wp_next_scheduled( \Bizgrowth360\AppBuilder\Billing\Cron::HOOK ) ) {
+		wp_schedule_event( time() + 300, 'hourly', \Bizgrowth360\AppBuilder\Billing\Cron::HOOK );
+	}
 
 	$rest_api = new \Bizgrowth360\AppBuilder\RestApi();
 	$rest_api->register_well_known_rewrite();

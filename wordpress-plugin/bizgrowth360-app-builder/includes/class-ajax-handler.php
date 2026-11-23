@@ -284,6 +284,11 @@ class AjaxHandler {
 			wp_send_json_error( array( 'message' => __( 'Invalid design JSON.', 'bizgrowth360-app-builder' ) ) );
 		}
 
+		$design_access = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_design( \Bizgrowth360\AppBuilder\Billing\Tenant::current_id(), $design );
+		if ( is_wp_error( $design_access ) ) {
+			wp_send_json_error( array( 'message' => $design_access->get_error_message(), 'code' => $design_access->get_error_code() ), 403 );
+		}
+
 		$config = new DesignConfig();
 		$saved  = $config->save( $design );
 		if ( is_wp_error( $saved ) ) {
@@ -342,6 +347,11 @@ class AjaxHandler {
 			wp_send_json_error( array( 'message' => __( 'Invalid native features payload.', 'bizgrowth360-app-builder' ) ) );
 		}
 
+		$features_access = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_native_features( \Bizgrowth360\AppBuilder\Billing\Tenant::current_id(), $features );
+		if ( is_wp_error( $features_access ) ) {
+			wp_send_json_error( array( 'message' => $features_access->get_error_message(), 'code' => $features_access->get_error_code() ), 403 );
+		}
+
 		$saved  = NativeFeatures::save_features( $features );
 		$status = NativeFeatures::get_features_with_status();
 
@@ -381,6 +391,11 @@ class AjaxHandler {
 
 		$features   = NativeFeatures::get_features();
 		$server_key = $features['push_notifications']['firebase_server_key'] ?? '';
+
+		$push_access = \Bizgrowth360\AppBuilder\Billing\Entitlements::assert_feature( \Bizgrowth360\AppBuilder\Billing\Tenant::current_id(), 'push_notifications' );
+		if ( is_wp_error( $push_access ) ) {
+			wp_send_json_error( array( 'message' => $push_access->get_error_message(), 'code' => $push_access->get_error_code() ), 403 );
+		}
 
 		if ( empty( $server_key ) ) {
 			wp_send_json_error( array( 'message' => __( 'Firebase Server Key is not configured in Native Features > Push Notifications.', 'bizgrowth360-app-builder' ) ) );

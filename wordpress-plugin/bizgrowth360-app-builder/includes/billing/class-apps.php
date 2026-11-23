@@ -91,7 +91,8 @@ class Apps {
 			)
 		);
 		if ( ! $app_id ) {
-			return new \WP_Error( 'app_error', __( 'Could not register application.', 'bizgrowth360-app-builder' ) );
+			global $wpdb;
+			return new \WP_Error( 'app_error', __( 'Could not register application.', 'bizgrowth360-app-builder' ) . ( $wpdb->last_error ? ' ' . $wpdb->last_error : '' ) );
 		}
 
 		Usage::record( $workspace_id, 'app_created', 1, 'app_created:' . $workspace_id . ':' . $package_id, array( 'meta' => array( 'package_id' => $package_id, 'app_id' => $app_id ) ) );
