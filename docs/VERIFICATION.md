@@ -192,12 +192,12 @@ The real plugin was activated on a local WordPress installation and the Design S
 
 | Item | Result |
 | :--- | :--- |
-| Regression push run `45114438708` (default config, APK + AAB) | **SUCCESS** |
-| Design dispatch run `45114615773` (Design Studio payload, APK/debug) | **SUCCESS** |
+| Regression push run `45114907777` (default config, APK + AAB) | **SUCCESS** |
+| Design dispatch run `45114928159` (Design Studio payload, APK/debug) | **SUCCESS** |
 | Artifact | `Design-Studio-Test-1.0.0-APK` |
 | Downloaded APK | `Design-Studio-Test-1.0.0-debug.apk` |
 | APK size | 4.18 MB |
-| APK SHA-256 | `31f68023dc0b4680fb4569c2180ec1ce5bf9e04deab5d129264593587bdf231e` |
+| APK SHA-256 | `b1af9a0990245c786d80fcd4817585a3c4e3a0917af634d14a2d8934d51f41bf` |
 | Embedded `design.json` | 8,079 bytes, schema v1 |
 | Embedded shell config | 6 navigation items, 4 homepage sections, 5 menu items |
 | Strict APK validation | package, version, label, URL, signature, bundled runtime config all PASS |
