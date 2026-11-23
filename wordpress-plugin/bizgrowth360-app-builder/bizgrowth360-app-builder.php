@@ -26,8 +26,11 @@ define( 'BIZGROWTH360_APP_BUILDER_FILE', __FILE__ );
 
 // Autoload plugin classes
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-config.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-build-db.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-settings.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-design-config.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-github-client.php';
+require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-build-manager.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-ajax-handler.php';
 require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-admin-page.php';
 
@@ -37,12 +40,18 @@ require_once BIZGROWTH360_APP_BUILDER_PATH . 'includes/class-admin-page.php';
 function bizgrowth360_app_builder_init() {
 	$settings      = new \Bizgrowth360\AppBuilder\Settings();
 	$github_client = new \Bizgrowth360\AppBuilder\GitHubClient( $settings );
-	$ajax_handler  = new \Bizgrowth360\AppBuilder\AjaxHandler( $settings, $github_client );
-	$admin_page    = new \Bizgrowth360\AppBuilder\AdminPage( $settings, $github_client );
+	$build_manager = new \Bizgrowth360\AppBuilder\BuildManager( $settings, $github_client );
+	$ajax_handler  = new \Bizgrowth360\AppBuilder\AjaxHandler( $settings, $github_client, $build_manager );
+	$admin_page    = new \Bizgrowth360\AppBuilder\AdminPage( $settings, $github_client, $build_manager );
 
 	$settings->init();
 	$ajax_handler->init();
 	$admin_page->init();
+
+	// Ensure DB table exists
+	if ( is_admin() && get_option( \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION_OPTION ) !== \Bizgrowth360\AppBuilder\BuildDb::DB_VERSION ) {
+		\Bizgrowth360\AppBuilder\BuildDb::install_table();
+	}
 }
 add_action( 'plugins_loaded', 'bizgrowth360_app_builder_init' );
 
@@ -52,5 +61,6 @@ add_action( 'plugins_loaded', 'bizgrowth360_app_builder_init' );
 function bizgrowth360_app_builder_activate() {
 	$settings = new \Bizgrowth360\AppBuilder\Settings();
 	$settings->set_defaults();
+	\Bizgrowth360\AppBuilder\BuildDb::install_table();
 }
 register_activation_hook( __FILE__, 'bizgrowth360_app_builder_activate' );

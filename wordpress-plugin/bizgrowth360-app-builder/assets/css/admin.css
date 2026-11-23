@@ -649,3 +649,137 @@
 	vertical-align: middle;
 	font-size: 13px;
 }
+
+/* Build Button Group */
+.bg360-build-button-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Filter Controls */
+.bg360-filter-controls {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+/* Modals */
+.bg360-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(15, 23, 42, 0.65);
+	backdrop-filter: blur(2px);
+	z-index: 99999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+
+.bg360-modal-box {
+	background: #ffffff;
+	border-radius: 12px;
+	box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+	max-width: 600px;
+	width: 100%;
+	max-height: 90vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	animation: bg360ModalFadeIn 0.2s ease-out;
+}
+
+.bg360-modal-wide {
+	max-width: 900px;
+}
+
+@keyframes bg360ModalFadeIn {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+.bg360-modal-header {
+	padding: 18px 24px;
+	border-bottom: 1px solid var(--bg360-border);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.bg360-modal-header h3 {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--bg360-text);
+}
+
+.bg360-modal-close {
+	background: none;
+	border: none;
+	font-size: 24px;
+	line-height: 1;
+	cursor: pointer;
+	color: #94A3B8;
+	padding: 0;
+}
+
+.bg360-modal-close:hover {
+	color: #0F172A;
+}
+
+.bg360-modal-body {
+	padding: 20px 24px;
+	overflow-y: auto;
+	font-size: 13px;
+}
+
+.bg360-modal-footer {
+	padding: 14px 24px;
+	background: #F8FAFC;
+	border-top: 1px solid var(--bg360-border);
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.bg360-summary-table th {
+	width: 35%;
+	font-weight: 600;
+	color: #475569;
+}
+
+.bg360-logs-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 12px;
+}
+
+.bg360-code-viewer {
+	background: #0F172A;
+	color: #E2E8F0;
+	padding: 16px;
+	border-radius: 8px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 12px;
+	line-height: 1.5;
+	max-height: 480px;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+	user-select: text;
+}

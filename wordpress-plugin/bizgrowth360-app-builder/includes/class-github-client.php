@@ -144,9 +144,9 @@ class GitHubClient {
 			'website_url'            => (string) ( $custom_inputs['website_url'] ?? $options['website_url'] ),
 			'version_name'           => (string) ( $custom_inputs['version_name'] ?? $options['version_name'] ),
 			'version_code'           => (string) ( $custom_inputs['version_code'] ?? $options['version_code'] ),
-			'build_type'             => $build_type,
-			'build_variant'          => $build_variant,
-			'orientation'            => $orientation,
+			'build_type'             => (string) $build_type,
+			'build_variant'          => (string) $build_variant,
+			'orientation'            => (string) $orientation,
 			'primary_color'          => (string) ( $options['primary_color'] ?? '#2563EB' ),
 			'background_color'       => (string) ( $options['background_color'] ?? '#FFFFFF' ),
 			'splash_background_color' => (string) ( $options['splash_background_color'] ?? '' ),
@@ -158,13 +158,13 @@ class GitHubClient {
 		);
 
 		$legacy_inputs = array(
-			'app_name'     => $inputs['app_name'],
-			'package_id'   => $inputs['package_id'],
-			'website_url'  => $inputs['website_url'],
-			'version_name' => $inputs['version_name'],
-			'version_code' => $inputs['version_code'],
-			'build_type'   => $legacy_build_type,
-			'build_target' => $legacy_build_target,
+			'app_name'     => (string) $inputs['app_name'],
+			'package_id'   => (string) $inputs['package_id'],
+			'website_url'  => (string) $inputs['website_url'],
+			'version_name' => (string) $inputs['version_name'],
+			'version_code' => (string) $inputs['version_code'],
+			'build_type'   => (string) $legacy_build_type,
+			'build_target' => (string) $legacy_build_target,
 			'config_file'  => 'config/default-app.json',
 		);
 
@@ -388,5 +388,249 @@ class GitHubClient {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Retrieve a single workflow run by ID.
+	 *
+	 * @param int $run_id
+	 * @return array
+	 */
+	public function get_run( $run_id ) {
+		if ( ! Config::has_token() ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Build service token is not configured.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$owner = Config::get_github_owner();
+		$repo  = Config::get_github_repo();
+
+		$url      = Config::get_api_base() . "/repos/{$owner}/{$repo}/actions/runs/{$run_id}";
+		$response = wp_remote_get(
+			$url,
+			array(
+				'headers' => $this->get_headers(),
+				'timeout' => 15,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Could not reach build service.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$status = wp_remote_retrieve_response_code( $response );
+		$body   = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 === $status && isset( $body['id'] ) ) {
+			return array(
+				'success' => true,
+				'run'     => array(
+					'id'           => $body['id'],
+					'run_number'   => $body['run_number'],
+					'status'       => $body['status'],
+					'conclusion'   => $body['conclusion'],
+					'created_at'   => $body['created_at'],
+					'updated_at'   => $body['updated_at'],
+					'duration_sec' => strtotime( $body['updated_at'] ) - strtotime( $body['run_started_at'] ),
+				),
+			);
+		}
+
+		return array(
+			'success' => false,
+			'message' => __( 'Build run not found.', 'bizgrowth360-app-builder' ),
+		);
+	}
+
+	/**
+	 * Retrieve jobs and steps for a specific workflow run.
+	 *
+	 * @param int $run_id
+	 * @return array
+	 */
+	public function get_run_jobs( $run_id ) {
+		if ( ! Config::has_token() ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Build service token is not configured.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$owner = Config::get_github_owner();
+		$repo  = Config::get_github_repo();
+
+		$url      = Config::get_api_base() . "/repos/{$owner}/{$repo}/actions/runs/{$run_id}/jobs";
+		$response = wp_remote_get(
+			$url,
+			array(
+				'headers' => $this->get_headers(),
+				'timeout' => 15,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Could not fetch job steps.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$status = wp_remote_retrieve_response_code( $response );
+		$body   = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( 200 === $status && isset( $body['jobs'] ) ) {
+			return array(
+				'success' => true,
+				'jobs'    => $body['jobs'],
+			);
+		}
+
+		return array(
+			'success' => false,
+			'message' => __( 'No job information found for run.', 'bizgrowth360-app-builder' ),
+		);
+	}
+
+	/**
+	 * Fetch plain text build logs for a job or run.
+	 *
+	 * @param int $run_id
+	 * @return array
+	 */
+	public function get_build_logs( $run_id ) {
+		if ( ! Config::has_token() ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Build service token is not configured.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		// First get the primary job ID for this run
+		$jobs_data = $this->get_run_jobs( $run_id );
+		if ( ! $jobs_data['success'] || empty( $jobs_data['jobs'] ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Build job logs are not available yet.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$job    = $jobs_data['jobs'][0];
+		$job_id = $job['id'];
+		$owner  = Config::get_github_owner();
+		$repo   = Config::get_github_repo();
+
+		$url      = Config::get_api_base() . "/repos/{$owner}/{$repo}/actions/jobs/{$job_id}/logs";
+		$response = wp_remote_get(
+			$url,
+			array(
+				'headers'     => $this->get_headers(),
+				'timeout'     => 15,
+				'redirection' => 0,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Could not download build logs.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$status   = wp_remote_retrieve_response_code( $response );
+		$headers  = wp_remote_retrieve_headers( $response );
+		$location = isset( $headers['location'] ) ? $headers['location'] : false;
+
+		$body = '';
+		if ( 302 === $status && ! empty( $location ) ) {
+			// Pre-signed cloud storage URL (Azure Blob / AWS S3) must be called WITHOUT the GitHub Bearer Authorization header
+			$log_response = wp_remote_get(
+				$location,
+				array(
+					'timeout'     => 25,
+					'redirection' => 5,
+				)
+			);
+
+			if ( ! is_wp_error( $log_response ) && 200 === wp_remote_retrieve_response_code( $log_response ) ) {
+				$body = wp_remote_retrieve_body( $log_response );
+			}
+		} elseif ( 200 === $status ) {
+			$body = wp_remote_retrieve_body( $response );
+		}
+
+		if ( ! empty( $body ) ) {
+			// Limit to last 500KB or ~1000 lines to prevent memory issues
+			if ( strlen( $body ) > 500000 ) {
+				$body = "... [log truncated for display] ...\n" . substr( $body, -500000 );
+			}
+
+			// Mask potential sensitive data (PAT tokens, passwords, keystores)
+			$body = preg_replace( '/ghp_[a-zA-Z0-9]{36}/', 'ghp_************************************', $body );
+			$body = preg_replace( '/[a-zA-Z0-9_\-\.]+@[a-zA-Z0-9_\-\.]+\.[a-zA-Z]{2,}/', '***@***.***', $body );
+
+			return array(
+				'success'  => true,
+				'job_id'   => $job_id,
+				'job_name' => $job['name'] ?? 'build-android',
+				'logs'     => $body,
+			);
+		}
+
+		return array(
+			'success' => false,
+			'message' => __( 'Logs are not available yet or the job is still initializing.', 'bizgrowth360-app-builder' ),
+		);
+	}
+
+	/**
+	 * Cancel an in-progress workflow run.
+	 *
+	 * @param int $run_id
+	 * @return array
+	 */
+	public function cancel_run( $run_id ) {
+		if ( ! Config::has_token() ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Build service token is not configured.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$owner = Config::get_github_owner();
+		$repo  = Config::get_github_repo();
+
+		$url      = Config::get_api_base() . "/repos/{$owner}/{$repo}/actions/runs/{$run_id}/cancel";
+		$response = wp_remote_post(
+			$url,
+			array(
+				'headers' => $this->get_headers(),
+				'timeout' => 15,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Failed to contact build service for cancellation.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$status = wp_remote_retrieve_response_code( $response );
+		if ( 202 === $status || 200 === $status ) {
+			return array(
+				'success' => true,
+				'message' => __( 'Cancellation request accepted by build service.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		return array(
+			'success' => false,
+			'message' => __( 'Could not cancel the build run. It may have already completed or stopped.', 'bizgrowth360-app-builder' ),
+		);
 	}
 }
