@@ -2,6 +2,9 @@
  * validate-config.js
  * Validates the Android build configuration for Bizgrowth360 Android Builder.
  * Reusable both as a CLI tool and as an imported module.
+ *
+ * This module is intentionally dependency-free so it can also be reused by a
+ * future WordPress plugin / API dispatcher.
  */
 
 const fs = require('fs');
@@ -22,8 +25,17 @@ const ALLOWED_ORIENTATIONS = new Set([
   'portrait', 'landscape', 'auto', 'sensor', 'unspecified'
 ]);
 
-const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+const ALLOWED_BUILD_TYPES = new Set(['apk', 'aab', 'both']);
+const ALLOWED_BUILD_VARIANTS = new Set(['release', 'debug']);
+
+// Android accepts #RGB and #RRGGBB. We intentionally reject #AARRGGBB here
+// because the same value is also consumed by CSS, where #RRGGBBAA means
+// something different. Keeping the schema to opaque colors avoids silent
+// branding inconsistencies between Android resources and the web shell.
+const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const SEMVER_OR_VERSION_REGEX = /^[0-9]+(\.[0-9]+)*(-[a-zA-Z0-9.]+)?$/;
+const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const ASSET_URL_FIELDS = ['icon_url', 'splash_url'];
 
 /**
  * Validates Android Package ID (applicationId)
@@ -47,6 +59,10 @@ function validatePackageId(packageId) {
     errors.push(`package_id is too long (${trimmed.length} chars). Maximum allowed is 255 characters.`);
   }
 
+  if (/\s/.test(trimmed)) {
+    errors.push('package_id cannot contain whitespace.');
+  }
+
   if (trimmed.startsWith('.') || trimmed.endsWith('.')) {
     errors.push('package_id cannot start or end with a dot.');
   }
@@ -58,6 +74,10 @@ function validatePackageId(packageId) {
   const segments = trimmed.split('.');
   if (segments.length < 2) {
     errors.push(`package_id "${trimmed}" must contain at least two segments (e.g., com.example.app).`);
+  }
+
+  if (segments.length > 64) {
+    errors.push('package_id cannot contain more than 64 dot-separated segments.');
   }
 
   for (const seg of segments) {
@@ -79,8 +99,10 @@ function validatePackageId(packageId) {
 }
 
 /**
- * Validates Website URL
- * Must be a valid HTTPS URL by default
+ * Validates Website URL.
+ * HTTPS is required by default. Dangerous schemes (javascript:, data:, file:,
+ * intent:) are rejected because the value is injected into the app shell,
+ * Capacitor configuration, and Android resources.
  */
 function validateWebsiteUrl(websiteUrl, allowHttp = false) {
   const errors = [];
@@ -90,6 +112,15 @@ function validateWebsiteUrl(websiteUrl, allowHttp = false) {
   }
 
   const trimmed = websiteUrl.trim();
+
+  if (trimmed.length > 2048) {
+    errors.push('website_url is too long (maximum 2048 characters).');
+  }
+
+  if (CONTROL_CHARS_REGEX.test(trimmed)) {
+    errors.push('website_url cannot contain control characters.');
+  }
+
   let parsedUrl;
   try {
     parsedUrl = new URL(trimmed);
@@ -98,27 +129,187 @@ function validateWebsiteUrl(websiteUrl, allowHttp = false) {
     return { valid: false, errors };
   }
 
-  if (!allowHttp && parsedUrl.protocol !== 'https:') {
-    errors.push(`website_url must use the secure "https://" protocol. Received: "${parsedUrl.protocol}"`);
-  } else if (allowHttp && parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
-    errors.push(`website_url must use "https://" or "http://". Received: "${parsedUrl.protocol}"`);
+  const allowedProtocols = allowHttp ? ['https:', 'http:'] : ['https:'];
+  if (!allowedProtocols.includes(parsedUrl.protocol)) {
+    errors.push(
+      `website_url must use ${allowHttp ? '"https://" or "http://"' : 'the secure "https://" protocol'}. ` +
+      `Received: "${parsedUrl.protocol}"`
+    );
+  }
+
+  if (parsedUrl.username || parsedUrl.password) {
+    errors.push('website_url must not contain embedded credentials (username/password).');
   }
 
   if (!parsedUrl.hostname || parsedUrl.hostname.length < 3) {
     errors.push(`website_url has an invalid hostname: "${parsedUrl.hostname}"`);
   }
 
-  return { valid: errors.length === 0, errors };
+  if (/[\s<>"'\\]/.test(parsedUrl.hostname)) {
+    errors.push(`website_url has an unsafe hostname: "${parsedUrl.hostname}"`);
+  }
+
+  return { valid: errors.length === 0, errors, url: parsedUrl };
 }
 
 /**
- * Validates full configuration object
+ * Validates an optional HTTPS image asset URL used by the build workflow.
+ */
+function validateAssetUrl(assetUrl, fieldName) {
+  const errors = [];
+  if (assetUrl === undefined || assetUrl === null || assetUrl === '') {
+    return { valid: true, errors, url: null };
+  }
+  if (typeof assetUrl !== 'string') {
+    errors.push(`${fieldName} must be a string URL.`);
+    return { valid: false, errors, url: null };
+  }
+  const trimmed = assetUrl.trim();
+  if (!trimmed) return { valid: true, errors, url: null };
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch (err) {
+    errors.push(`${fieldName} is not a valid URL: ${err.message}`);
+    return { valid: false, errors, url: null };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    errors.push(`${fieldName} must use https://. Received: "${parsed.protocol}"`);
+  }
+  if (parsed.username || parsed.password) {
+    errors.push(`${fieldName} must not contain embedded credentials.`);
+  }
+  if (!parsed.hostname || parsed.hostname.length < 3) {
+    errors.push(`${fieldName} has an invalid hostname.`);
+  }
+
+  return { valid: errors.length === 0, errors, url: trimmed };
+}
+
+/**
+ * Validates and normalizes a hex color. Returns { valid, errors, value }.
+ */
+function validateColor(value, fieldName) {
+  const errors = [];
+  if (typeof value !== 'string' || !HEX_COLOR_REGEX.test(value.trim())) {
+    errors.push(`${fieldName} must be a valid opaque hex color (e.g. #2563EB or #FFF). Received: "${value}"`);
+    return { valid: false, errors, value: null };
+  }
+  let hex = value.trim().toUpperCase();
+  if (hex.length === 4) {
+    hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  return { valid: true, errors, value: hex };
+}
+
+/**
+ * Escapes a value for safe inclusion in an XML resource / AndroidManifest.
+ */
+function escapeXml(unsafe) {
+  if (unsafe === undefined || unsafe === null) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/**
+ * Escapes a value for an Android string resource. AAPT2 requires a backslash
+ * before apostrophes, quotes and backslashes. XML metacharacters are escaped
+ * so the generated strings.xml can never be broken out of by a customer value.
+ */
+function escapeAndroidString(unsafe) {
+  if (unsafe === undefined || unsafe === null) return '';
+  return String(unsafe)
+    .replace(/\\/g, '\\\\')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\r\n|\r|\n/g, '\\n')
+    .replace(/\t/g, '\\t');
+}
+
+/**
+ * Escapes a value for safe inclusion in an HTML text node or title.
+ */
+function escapeHtml(unsafe) {
+  if (unsafe === undefined || unsafe === null) return '';
+  return String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Converts an arbitrary display string into a safe filename component.
+ * Prevents path traversal, reserved Windows device names, control characters
+ * and excessively long names.
+ */
+function sanitizeFileComponent(value, fallback = 'App', maxLength = 80) {
+  let name = String(value === undefined || value === null ? '' : value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^[-._]+/, '')
+    .replace(/[-._]+$/, '');
+
+  if (!name) name = fallback;
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(name)) {
+    name = `app-${name}`;
+  }
+  if (name.length > maxLength) {
+    name = name.slice(0, maxLength).replace(/[-._]+$/, '');
+  }
+  return name || fallback;
+}
+
+/**
+ * Builds the dynamic artifact base name, e.g. "Mahankali-Store-1.0.0".
+ */
+function buildArtifactBaseName(appName, versionName) {
+  const safeApp = sanitizeFileComponent(appName, 'App', 60);
+  const safeVersion = sanitizeFileComponent(versionName, '1.0.0', 32);
+  return `${safeApp}-${safeVersion}`;
+}
+
+/**
+ * Detects duplicate package IDs in a set of build configurations.
+ * Used by the future API dispatcher and by the test suite.
+ */
+function findDuplicatePackageIds(configs) {
+  const seen = new Map();
+  const duplicates = [];
+  for (const cfg of configs || []) {
+    if (!cfg || !cfg.package_id) continue;
+    const id = String(cfg.package_id).trim();
+    if (seen.has(id)) {
+      duplicates.push(id);
+    } else {
+      seen.set(id, true);
+    }
+  }
+  return Array.from(new Set(duplicates));
+}
+
+/**
+ * Validates full configuration object.
+ *
+ * options.allowHttp - allow http website URLs (default false)
+ * options.baseDir   - optional base directory used for asset path validation
  */
 function validateConfig(config, options = {}) {
   const errors = [];
   const warnings = [];
 
-  if (!config || typeof config !== 'object') {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return {
       valid: false,
       errors: ['Configuration must be a non-empty JSON object.'],
@@ -129,8 +320,19 @@ function validateConfig(config, options = {}) {
   // 1. app_name
   if (typeof config.app_name !== 'string' || !config.app_name.trim()) {
     errors.push('app_name is required and must be a non-empty string.');
-  } else if (config.app_name.trim().length > 50) {
-    warnings.push(`app_name "${config.app_name}" is longer than 50 characters; it may be truncated on Android launcher screens.`);
+  } else {
+    const name = config.app_name.trim();
+    if (name.length > 60) {
+      errors.push(`app_name is too long (${name.length} chars). Maximum allowed is 60 characters.`);
+    } else if (name.length > 50) {
+      warnings.push(`app_name "${name}" is longer than 50 characters; it may be truncated on Android launcher screens.`);
+    }
+    if (CONTROL_CHARS_REGEX.test(name)) {
+      errors.push('app_name cannot contain control characters or newlines.');
+    }
+    if (!/[\p{L}\p{N}]/u.test(name)) {
+      warnings.push('app_name does not contain any letters or numbers.');
+    }
   }
 
   // 2. package_id
@@ -148,12 +350,18 @@ function validateConfig(config, options = {}) {
   // 4. version_name
   if (typeof config.version_name !== 'string' || !config.version_name.trim()) {
     errors.push('version_name is required (e.g. "1.0.0").');
-  } else if (!SEMVER_OR_VERSION_REGEX.test(config.version_name.trim())) {
-    errors.push(`version_name "${config.version_name}" is invalid. Expected format like "1.0.0" or "2.1.4-beta".`);
+  } else {
+    const version = config.version_name.trim();
+    if (!SEMVER_OR_VERSION_REGEX.test(version)) {
+      errors.push(`version_name "${version}" is invalid. Expected format like "1.0.0" or "2.1.4-beta".`);
+    }
+    if (version.length > 64) {
+      errors.push('version_name cannot exceed 64 characters.');
+    }
   }
 
   // 5. version_code
-  if (config.version_code === undefined || config.version_code === null) {
+  if (config.version_code === undefined || config.version_code === null || config.version_code === '') {
     errors.push('version_code is required (positive integer >= 1).');
   } else {
     const code = Number(config.version_code);
@@ -164,46 +372,124 @@ function validateConfig(config, options = {}) {
     }
   }
 
-  // 6. Colors (optional with defaults or format checked)
-  const colorFields = ['primary_color', 'background_color', 'status_bar_color', 'navigation_bar_color'];
-  for (const field of colorFields) {
-    if (config[field]) {
-      if (typeof config[field] !== 'string' || !HEX_COLOR_REGEX.test(config[field])) {
-        errors.push(`${field} must be a valid hex color string (e.g. #2563EB or #FFFFFF). Received: "${config[field]}"`);
-      }
+  // 6. Colors. status/navigation/splash defaults are derived later.
+  const requiredColors = ['primary_color', 'background_color'];
+  for (const field of requiredColors) {
+    if (config[field] === undefined || config[field] === null || config[field] === '') {
+      errors.push(`${field} is required.`);
+    } else {
+      const result = validateColor(config[field], field);
+      if (!result.valid) errors.push(...result.errors);
+    }
+  }
+
+  const optionalColors = [
+    'splash_background_color',
+    'status_bar_color',
+    'navigation_bar_color'
+  ];
+  for (const field of optionalColors) {
+    if (config[field] !== undefined && config[field] !== null && config[field] !== '') {
+      const result = validateColor(config[field], field);
+      if (!result.valid) errors.push(...result.errors);
     }
   }
 
   // 7. orientation
-  if (config.orientation) {
+  if (config.orientation !== undefined && config.orientation !== null && config.orientation !== '') {
     if (typeof config.orientation !== 'string' || !ALLOWED_ORIENTATIONS.has(config.orientation.toLowerCase())) {
       errors.push(`orientation must be one of: ${Array.from(ALLOWED_ORIENTATIONS).join(', ')}. Received: "${config.orientation}"`);
     }
   }
 
-  // 8. allow_external_links
-  if (config.allow_external_links !== undefined && typeof config.allow_external_links !== 'boolean') {
-    errors.push(`allow_external_links must be a boolean (true or false). Received: ${config.allow_external_links}`);
+  // 8. Booleans
+  const booleanFields = ['allow_external_links', 'enable_status_bar'];
+  for (const field of booleanFields) {
+    if (config[field] !== undefined && typeof config[field] !== 'boolean') {
+      errors.push(`${field} must be a boolean (true or false). Received: ${config[field]}`);
+    }
   }
+
+  // 9. Build type / variant
+  let buildType = 'both';
+  let buildVariant = 'release';
+  if (config.build_type !== undefined && config.build_type !== null && config.build_type !== '') {
+    if (typeof config.build_type !== 'string') {
+      errors.push('build_type must be a string.');
+    } else {
+      const raw = config.build_type.toLowerCase();
+      if (raw === 'debug' || raw === 'release') {
+        // Backwards compatibility with the Phase 2 workflow inputs where
+        // "build_type" meant debug/release and "build_target" meant apk/aab.
+        buildVariant = raw;
+        warnings.push(`Legacy build_type "${raw}" interpreted as build_variant.`);
+        const legacyTarget = String(config.build_target || 'both').toLowerCase();
+        buildType = ALLOWED_BUILD_TYPES.has(legacyTarget) ? legacyTarget : 'both';
+      } else if (ALLOWED_BUILD_TYPES.has(raw)) {
+        buildType = raw;
+      } else {
+        errors.push(`build_type must be one of: apk, aab, both. Received: "${config.build_type}"`);
+      }
+    }
+  }
+
+  if (config.build_variant !== undefined && config.build_variant !== null && config.build_variant !== '') {
+    if (typeof config.build_variant !== 'string' || !ALLOWED_BUILD_VARIANTS.has(config.build_variant.toLowerCase())) {
+      errors.push(`build_variant must be one of: release, debug. Received: "${config.build_variant}"`);
+    } else {
+      buildVariant = config.build_variant.toLowerCase();
+    }
+  }
+
+  // 10. Optional asset paths
+  for (const field of ['app_icon', 'splash_image']) {
+    if (config[field] !== undefined && config[field] !== null && config[field] !== '' && typeof config[field] !== 'string') {
+      errors.push(`${field} must be a string path.`);
+    }
+  }
+
+  // 11. Optional remote asset URLs
+  for (const field of ASSET_URL_FIELDS) {
+    const result = validateAssetUrl(config[field], field);
+    if (!result.valid) errors.push(...result.errors);
+  }
+
+  const primaryColor = typeof config.primary_color === 'string' ? config.primary_color.trim().toUpperCase() : '';
+  const backgroundColor = typeof config.background_color === 'string' ? config.background_color.trim().toUpperCase() : '';
+  const splashBackgroundColor = (
+    typeof config.splash_background_color === 'string' && config.splash_background_color.trim()
+  ) ? config.splash_background_color.trim().toUpperCase() : backgroundColor;
+  const statusBarColor = (
+    typeof config.status_bar_color === 'string' && config.status_bar_color.trim()
+  ) ? config.status_bar_color.trim().toUpperCase() : (primaryColor || '#2563EB');
+  const navigationBarColor = (
+    typeof config.navigation_bar_color === 'string' && config.navigation_bar_color.trim()
+  ) ? config.navigation_bar_color.trim().toUpperCase() : (backgroundColor || '#FFFFFF');
 
   return {
     valid: errors.length === 0,
     errors,
     warnings,
     normalizedConfig: {
-      app_name: config.app_name ? config.app_name.trim() : '',
-      package_id: config.package_id ? config.package_id.trim() : '',
-      website_url: config.website_url ? config.website_url.trim() : '',
-      version_name: config.version_name ? config.version_name.trim() : '1.0.0',
+      app_name: typeof config.app_name === 'string' ? config.app_name.trim() : '',
+      package_id: typeof config.package_id === 'string' ? config.package_id.trim() : '',
+      website_url: typeof config.website_url === 'string' ? config.website_url.trim() : '',
+      version_name: typeof config.version_name === 'string' ? config.version_name.trim() : '1.0.0',
       version_code: Number(config.version_code) || 1,
-      app_icon: config.app_icon || 'public/icon.png',
-      splash_image: config.splash_image || 'public/splash.png',
-      primary_color: config.primary_color || '#2563EB',
-      background_color: config.background_color || '#FFFFFF',
-      status_bar_color: config.status_bar_color || config.primary_color || '#2563EB',
-      navigation_bar_color: config.navigation_bar_color || '#FFFFFF',
-      orientation: config.orientation ? config.orientation.toLowerCase() : 'portrait',
-      allow_external_links: config.allow_external_links !== false
+      app_icon: config.app_icon || null,
+      splash_image: config.splash_image || null,
+      icon_url: config.icon_url || null,
+      splash_url: config.splash_url || null,
+      primary_color: primaryColor || '#2563EB',
+      background_color: backgroundColor || '#FFFFFF',
+      splash_background_color: splashBackgroundColor || '#FFFFFF',
+      status_bar_color: statusBarColor || '#2563EB',
+      navigation_bar_color: navigationBarColor || '#FFFFFF',
+      orientation: typeof config.orientation === 'string' ? config.orientation.toLowerCase() : 'portrait',
+      allow_external_links: config.allow_external_links !== false,
+      enable_status_bar: config.enable_status_bar !== false,
+      build_type: buildType,
+      build_variant: buildVariant
     }
   };
 }
@@ -224,8 +510,7 @@ function runSelfTests() {
     }
   }
 
-  // Test 1: Valid config
-  const validResult = validateConfig({
+  const base = {
     app_name: 'Bizgrowth360 App',
     package_id: 'in.bizgrowth360.demoapp',
     website_url: 'https://example.com',
@@ -233,55 +518,51 @@ function runSelfTests() {
     version_code: 1,
     primary_color: '#2563EB',
     background_color: '#FFFFFF'
-  });
-  assert(validResult.valid === true, 'Valid config passes validation');
+  };
 
-  // Test 2: Invalid package ID (reserved keyword)
+  assert(validateConfig(base).valid === true, 'Valid config passes validation');
+
   const kwResult = validatePackageId('com.switch.app');
   assert(kwResult.valid === false && kwResult.errors.some(e => e.includes('reserved Java keyword')),
     'Rejects Java reserved keyword in package segment ("switch")');
 
-  // Test 3: Invalid package ID (starts with digit)
   const digitResult = validatePackageId('com.123test.app');
   assert(digitResult.valid === false && digitResult.errors.some(e => e.includes('must start with an ASCII letter')),
     'Rejects segment starting with a number');
 
-  // Test 4: Single segment package ID
+  const hyphenResult = validatePackageId('com.my-app.app');
+  assert(hyphenResult.valid === false && hyphenResult.errors.some(e => e.includes('invalid characters')),
+    'Rejects hyphens in package ID');
+
   const singleResult = validatePackageId('bizgrowth360');
   assert(singleResult.valid === false && singleResult.errors.some(e => e.includes('must contain at least two segments')),
     'Rejects single-segment package ID');
 
-  // Test 5: Insecure HTTP URL
   const httpResult = validateWebsiteUrl('http://insecure-site.com');
   assert(httpResult.valid === false && httpResult.errors.some(e => e.includes('https://')),
     'Rejects plain http website URL');
 
-  // Test 6: Malformed URL
+  const schemeResult = validateWebsiteUrl('javascript:alert(1)');
+  assert(schemeResult.valid === false && schemeResult.errors.some(e => e.includes('secure')),
+    'Rejects javascript scheme');
+
   const malformedUrl = validateWebsiteUrl('not-a-url');
   assert(malformedUrl.valid === false, 'Rejects malformed URL');
 
-  // Test 7: Invalid Hex color
-  const colorResult = validateConfig({
-    app_name: 'Test',
-    package_id: 'com.test.app',
-    website_url: 'https://test.com',
-    version_name: '1.0.0',
-    version_code: 1,
-    primary_color: 'blue'
-  });
-  assert(colorResult.valid === false && colorResult.errors.some(e => e.includes('primary_color must be a valid hex color')),
+  const colorResult = validateConfig({ ...base, primary_color: 'blue' });
+  assert(colorResult.valid === false && colorResult.errors.some(e => e.includes('primary_color must be a valid')),
     'Rejects non-hex color name "blue"');
 
-  // Test 8: Invalid version code
-  const vcResult = validateConfig({
-    app_name: 'Test',
-    package_id: 'com.test.app',
-    website_url: 'https://test.com',
-    version_name: '1.0.0',
-    version_code: -5
-  });
+  const vcResult = validateConfig({ ...base, version_code: -5 });
   assert(vcResult.valid === false && vcResult.errors.some(e => e.includes('version_code must be a positive integer')),
     'Rejects negative version code');
+
+  const escaped = escapeAndroidString("Mahankali's <Store> & Co");
+  assert(escaped.includes("\\'") && escaped.includes('&amp;') && escaped.includes('&lt;'),
+    'Escapes apostrophes and XML metacharacters for Android string resources');
+
+  const artifact = buildArtifactBaseName('../../Mahankali/Store', '1.0.0');
+  assert(artifact === 'Mahankali-Store-1.0.0', 'Generates safe artifact names without path traversal');
 
   console.log(`\nSelf-test summary: ${passed} passed, ${failed} failed.`);
   if (failed > 0) {
@@ -343,5 +624,16 @@ module.exports = {
   validateConfig,
   validatePackageId,
   validateWebsiteUrl,
-  RESERVED_JAVA_KEYWORDS
+  validateAssetUrl,
+  validateColor,
+  escapeXml,
+  escapeAndroidString,
+  escapeHtml,
+  sanitizeFileComponent,
+  buildArtifactBaseName,
+  findDuplicatePackageIds,
+  RESERVED_JAVA_KEYWORDS,
+  ALLOWED_ORIENTATIONS,
+  ALLOWED_BUILD_TYPES,
+  ALLOWED_BUILD_VARIANTS
 };

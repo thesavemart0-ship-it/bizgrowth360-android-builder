@@ -1,0 +1,19 @@
+{
+  "app_name": "TownConnect",
+  "package_id": "in.bizgrowth360.townconnect",
+  "website_url": "https://wordpress.townconnectai.com",
+  "version_name": "1.0.1",
+  "version_code": 2,
+  "app_icon": null,
+  "splash_image": null,
+  "primary_color": "#059669",
+  "background_color": "#FFFFFF",
+  "splash_background_color": "#ECFDF5",
+  "status_bar_color": "#059669",
+  "navigation_bar_color": "#FFFFFF",
+  "orientation": "auto",
+  "build_type": "apk",
+  "build_variant": "debug",
+  "allow_external_links": false,
+  "enable_status_bar": true
+}

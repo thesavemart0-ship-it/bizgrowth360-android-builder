@@ -8,8 +8,12 @@
   "splash_image": "public/splash.png",
   "primary_color": "#2563EB",
   "background_color": "#FFFFFF",
+  "splash_background_color": "#FFFFFF",
   "status_bar_color": "#2563EB",
   "navigation_bar_color": "#FFFFFF",
   "orientation": "portrait",
-  "allow_external_links": true
+  "build_type": "both",
+  "build_variant": "release",
+  "allow_external_links": true,
+  "enable_status_bar": true
 }

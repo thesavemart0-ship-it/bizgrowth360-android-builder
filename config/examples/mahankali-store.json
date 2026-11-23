@@ -1,0 +1,19 @@
+{
+  "app_name": "Mahankali Store",
+  "package_id": "in.bizgrowth360.mahankalistore",
+  "website_url": "https://mahankalistore.example.com",
+  "version_name": "1.0.0",
+  "version_code": 1,
+  "app_icon": null,
+  "splash_image": null,
+  "primary_color": "#7C3AED",
+  "background_color": "#FFFFFF",
+  "splash_background_color": "#F5F3FF",
+  "status_bar_color": "#7C3AED",
+  "navigation_bar_color": "#FFFFFF",
+  "orientation": "portrait",
+  "build_type": "both",
+  "build_variant": "release",
+  "allow_external_links": true,
+  "enable_status_bar": true
+}

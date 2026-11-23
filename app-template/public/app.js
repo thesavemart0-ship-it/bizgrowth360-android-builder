@@ -42,6 +42,39 @@
     targetUrlEl.textContent = config.websiteUrl;
   }
 
+  /**
+   * Applies the configured native status bar branding. Uses the Capacitor
+   * StatusBar plugin when the bridge is available; silently no-ops in a browser.
+   */
+  function applyNativeChrome() {
+    var capacitor = window.Capacitor;
+    if (!capacitor || !capacitor.Plugins || !capacitor.Plugins.StatusBar) return;
+    var statusBar = capacitor.Plugins.StatusBar;
+    try {
+      if (config.enableStatusBar === false) {
+        statusBar.hide();
+        return;
+      }
+      var color = config.statusBarColor || '#FFFFFF';
+      if (statusBar.setBackgroundColor) {
+        statusBar.setBackgroundColor({ color: color });
+      }
+      if (statusBar.setStyle) {
+        var hex = color.replace('#', '');
+        if (hex.length === 3) {
+          hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
+        }
+        var r = parseInt(hex.substring(0, 2), 16) || 0;
+        var g = parseInt(hex.substring(2, 4), 16) || 0;
+        var b = parseInt(hex.substring(4, 6), 16) || 0;
+        var luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        statusBar.setStyle({ style: luminance > 0.6 ? 'DARK' : 'LIGHT' });
+      }
+    } catch (e) {
+      // Native chrome is best-effort; never block the website.
+    }
+  }
+
   var isRetrying = false;
   var targetUrl = config.websiteUrl || 'https://example.com';
 
@@ -191,6 +224,8 @@
 
   // Initial check on page load
   document.addEventListener('DOMContentLoaded', function () {
+    applyNativeChrome();
+
     // Check URL query parameters for explicit error triggers (e.g. from Android native onReceivedError)
     var urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('state') === 'offline') {
