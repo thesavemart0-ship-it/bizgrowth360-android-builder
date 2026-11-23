@@ -1,22 +1,50 @@
 /**
- * Bizgrowth360 Native Feature Bridge v1.0.0
+ * Bizgrowth360 Native Feature Bridge v1.1.0
  *
  * Provides a standardized, secure, versioned JavaScript API connecting website
- * pages running inside the Android WebView to native Android hardware and OS capabilities.
+ * pages running inside the Android WebView or iOS WKWebView to native hardware
+ * and OS capabilities.
  */
 
 (function (window) {
   'use strict';
 
-  var BRIDGE_VERSION = '1.0.0';
+  var BRIDGE_VERSION = '1.1.0';
   var listeners = {};
 
   var config = window.APP_CONFIG || {};
 
+  function detectPlatform() {
+    try {
+      if (window.Capacitor && typeof window.Capacitor.getPlatform === 'function') {
+        var platform = window.Capacitor.getPlatform();
+        if (platform) return platform;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return config.platform || 'web';
+  }
+
+  function isNativePlatform() {
+    try {
+      if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
+        return window.Capacitor.isNativePlatform();
+      }
+    } catch (e) {
+      // ignore
+    }
+    return typeof window.Capacitor !== 'undefined';
+  }
+
+  function capacitorPlugin(name) {
+    return window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins[name] : null;
+  }
+
   var Bridge = {
     version: BRIDGE_VERSION,
-    platform: 'android',
-    isNative: typeof window.Capacitor !== 'undefined',
+    platform: detectPlatform(),
+    isNative: isNativePlatform(),
 
     /**
      * Return active application metadata.
@@ -25,6 +53,8 @@
       return {
         appName: config.appName || 'Bizgrowth360 App',
         packageId: config.packageId || 'in.bizgrowth360.app',
+        bundleId: config.bundleId || config.packageId || 'in.bizgrowth360.app',
+        platform: this.platform,
         versionName: config.versionName || '1.0.0',
         versionCode: config.versionCode || 1,
         bridgeVersion: BRIDGE_VERSION,
@@ -33,8 +63,27 @@
     },
 
     /**
-     * Native Android Share sheet.
-     * Shares URL, title and text. Falls back gracefully on regular web browsers.
+     * Report which native features are available on this platform/build.
+     *
+     * @returns {Object}
+     */
+    getCapabilities: function () {
+      return {
+        platform: this.platform,
+        native: this.isNative,
+        share: !!capacitorPlugin('Share') || !!navigator.share,
+        camera: !!capacitorPlugin('Camera'),
+        geolocation: !!capacitorPlugin('Geolocation') || !!navigator.geolocation,
+        pushNotifications: !!capacitorPlugin('PushNotifications'),
+        deepLinks: !!capacitorPlugin('App'),
+        fileUpload: true,
+        offlineDetection: typeof navigator.onLine === 'boolean',
+        inAppUpdates: true
+      };
+    },
+
+    /**
+     * Native Share sheet (Android and iOS).
      *
      * @param {Object} options { title, text, url, dialogTitle }
      * @returns {Promise<Object>}
@@ -48,17 +97,15 @@
         dialogTitle: options.dialogTitle || 'Share via'
       };
 
-      // 1. Try Capacitor Native Share
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share) {
-        return window.Capacitor.Plugins.Share.share(shareData);
+      var sharePlugin = capacitorPlugin('Share');
+      if (sharePlugin) {
+        return sharePlugin.share(shareData);
       }
 
-      // 2. Try Standard Web Share API
       if (navigator.share) {
         return navigator.share(shareData);
       }
 
-      // 3. Fallback: Copy to clipboard
       if (navigator.clipboard && navigator.clipboard.writeText) {
         return navigator.clipboard.writeText(shareData.url).then(function () {
           alert('Link copied to clipboard: ' + shareData.url);
@@ -66,7 +113,6 @@
         });
       }
 
-      // Prompt fallback
       window.prompt('Copy link to share:', shareData.url);
       return Promise.resolve({ value: 'prompt' });
     },
@@ -85,6 +131,37 @@
     },
 
     /**
+     * Request a geolocation fix. Uses the Capacitor Geolocation plugin on
+     * Android/iOS (which triggers the correct native permission prompt) and
+     * falls back to the browser API on the web.
+     *
+     * @param {Object} options Capacitor/browser geolocation options
+     * @returns {Promise<Object>}
+     */
+    getLocation: function (options) {
+      options = options || { enableHighAccuracy: true, timeout: 15000 };
+      var geo = capacitorPlugin('Geolocation');
+
+      if (geo) {
+        var permission = geo.requestPermissions ? geo.requestPermissions() : Promise.resolve({ location: 'granted' });
+        return permission.then(function (state) {
+          if (state && state.location && state.location !== 'granted' && state.location !== 'prompt') {
+            throw new Error('Location permission was not granted.');
+          }
+          return geo.getCurrentPosition(options);
+        });
+      }
+
+      return new Promise(function (resolve, reject) {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation is not available on this device.'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+    },
+
+    /**
      * Query app updates from the WordPress REST API endpoint.
      *
      * @returns {Promise<Object>}
@@ -98,7 +175,8 @@
       }
 
       var updateEndpoint = baseUrl.replace(/\/+$/, '') + '/wp-json/bizgrowth360/v1/app-update'
-        + '?package_id=' + encodeURIComponent(info.packageId)
+        + '?package_id=' + encodeURIComponent(info.bundleId)
+        + '&platform=' + encodeURIComponent(info.platform)
         + '&version_code=' + encodeURIComponent(info.versionCode);
 
       return fetch(updateEndpoint)
@@ -113,10 +191,33 @@
     },
 
     /**
+     * Open the correct store/download destination for an update payload.
+     * iOS uses the App Store URL; Android uses Play Store or a direct APK.
+     *
+     * @param {Object} updateData
+     * @returns {boolean}
+     */
+    openUpdate: function (updateData) {
+      updateData = updateData || {};
+      var target;
+      if (this.platform === 'ios') {
+        target = updateData.app_store_url || updateData.play_store_url;
+      } else {
+        target = updateData.direct_apk_url || updateData.play_store_url || updateData.app_store_url;
+      }
+      if (!target) return false;
+      window.open(target, '_system');
+      return true;
+    },
+
+    /**
      * Register a push notification device token with WordPress.
      *
-     * @param {string} token FCM device token
-     * @param {string} [deviceId] Optional unique device UUID
+     * Android supplies an FCM registration token. iOS supplies an APNs token;
+     * it is stored with platform=ios and must be delivered by an APNs provider.
+     *
+     * @param {string} token
+     * @param {string} [deviceId]
      * @returns {Promise<Object>}
      */
     registerPushToken: function (token, deviceId) {
@@ -130,9 +231,9 @@
       var payload = {
         token: token,
         device_id: deviceId || ('device_' + Math.random().toString(36).substr(2, 9)),
-        platform: 'android',
+        platform: info.platform,
         app_version: info.versionName,
-        package_id: info.packageId
+        package_id: info.bundleId
       };
 
       return fetch(endpoint, {
@@ -141,6 +242,32 @@
         body: JSON.stringify(payload)
       }).then(function (res) {
         return res.json();
+      });
+    },
+
+    /**
+     * Ask for notification permission and register with APNs/FCM.
+     * On iOS this must run after the user has interacted with the app.
+     *
+     * @returns {Promise<Object>}
+     */
+    requestPushPermission: function () {
+      var push = capacitorPlugin('PushNotifications');
+      if (!push) {
+        return Promise.resolve({ status: 'unsupported' });
+      }
+
+      var check = push.checkPermissions ? push.checkPermissions() : Promise.resolve({ receive: 'prompt' });
+      return check.then(function (state) {
+        if (state && state.receive === 'granted') {
+          return push.register().then(function () { return { status: 'granted' }; });
+        }
+        return push.requestPermissions().then(function (result) {
+          if (result && result.receive === 'granted') {
+            return push.register().then(function () { return { status: 'granted' }; });
+          }
+          return { status: 'denied' };
+        });
       });
     },
 
@@ -182,22 +309,27 @@
   });
 
   // Wire Capacitor App Deep-linking if available
-  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-    window.Capacitor.Plugins.App.addListener('appUrlOpen', function (data) {
+  var appPlugin = capacitorPlugin('App');
+  if (appPlugin && appPlugin.addListener) {
+    appPlugin.addListener('appUrlOpen', function (data) {
       Bridge.emit('deepLink', data);
     });
   }
 
   // Wire Capacitor Push Notification events if available
-  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
-    window.Capacitor.Plugins.PushNotifications.addListener('registration', function (token) {
+  var pushPlugin = capacitorPlugin('PushNotifications');
+  if (pushPlugin && pushPlugin.addListener) {
+    pushPlugin.addListener('registration', function (token) {
       Bridge.emit('pushToken', token);
       Bridge.registerPushToken(token.value);
     });
-    window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationReceived', function (notification) {
+    pushPlugin.addListener('registrationError', function (error) {
+      Bridge.emit('pushRegistrationError', error);
+    });
+    pushPlugin.addListener('pushNotificationReceived', function (notification) {
       Bridge.emit('pushNotification', notification);
     });
-    window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', function (action) {
+    pushPlugin.addListener('pushNotificationActionPerformed', function (action) {
       Bridge.emit('pushNotificationAction', action);
       if (action.notification && action.notification.data && action.notification.data.deep_link) {
         window.location.href = action.notification.data.deep_link;
