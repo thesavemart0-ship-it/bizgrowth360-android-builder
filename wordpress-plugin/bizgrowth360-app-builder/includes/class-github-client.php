@@ -154,6 +154,7 @@ class GitHubClient {
 			'splash_url'             => (string) ( $options['splash_image'] ?? '' ),
 			'allow_external_links'   => ! empty( $options['allow_external_links'] ) ? 'true' : 'false',
 			'enable_status_bar'      => 'true',
+			'design_json'            => (string) ( $custom_inputs['design_json'] ?? '' ),
 			'config_file'            => 'config/default-app.json',
 		);
 

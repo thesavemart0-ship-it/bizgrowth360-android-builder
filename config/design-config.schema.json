@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bizgrowth360.in/schemas/design-config.json",
+  "title": "Bizgrowth360 App Design Studio Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "theme", "header", "navigation", "menu", "homepage", "components", "typography", "layout"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "theme": {
+      "type": "object",
+      "required": ["mode", "primary_color", "background_color", "card_color", "text_color", "heading_color", "button_color", "button_text_color", "border_color", "status_bar_color", "navigation_bar_color"],
+      "properties": {
+        "mode": { "enum": ["light", "dark", "auto"] },
+        "primary_color": { "$ref": "#/definitions/color" },
+        "secondary_color": { "$ref": "#/definitions/color" },
+        "accent_color": { "$ref": "#/definitions/color" },
+        "background_color": { "$ref": "#/definitions/color" },
+        "card_color": { "$ref": "#/definitions/color" },
+        "text_color": { "$ref": "#/definitions/color" },
+        "heading_color": { "$ref": "#/definitions/color" },
+        "button_color": { "$ref": "#/definitions/color" },
+        "button_text_color": { "$ref": "#/definitions/color" },
+        "border_color": { "$ref": "#/definitions/color" },
+        "status_bar_color": { "$ref": "#/definitions/color" },
+        "navigation_bar_color": { "$ref": "#/definitions/color" },
+        "dark": { "$ref": "#/definitions/palette" }
+      }
+    },
+    "header": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "show_logo": { "type": "boolean" },
+        "logo_url": { "type": "string" },
+        "title": { "type": "string", "maxLength": 80 },
+        "background_color": { "$ref": "#/definitions/color" },
+        "text_color": { "$ref": "#/definitions/color" },
+        "height": { "type": "integer", "minimum": 44, "maximum": 88 },
+        "sticky": { "type": "boolean" },
+        "show_search": { "type": "boolean" },
+        "show_notifications": { "type": "boolean" },
+        "show_cart": { "type": "boolean" },
+        "show_profile": { "type": "boolean" },
+        "search_url": { "type": "string" },
+        "notification_url": { "type": "string" },
+        "cart_url": { "type": "string" },
+        "profile_url": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string", "maxLength": 40 },
+              "icon": { "$ref": "#/definitions/icon" },
+              "url": { "type": "string" },
+              "enabled": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "navigation": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["none", "bottom", "drawer", "top"] },
+        "style": { "enum": ["solid", "transparent", "floating"] },
+        "more_label": { "type": "string", "maxLength": 20 },
+        "items": { "type": "array", "maxItems": 8, "items": { "$ref": "#/definitions/navItem" } }
+      }
+    },
+    "menu": {
+      "type": "object",
+      "properties": {
+        "groups": { "type": "array", "maxItems": 8, "items": { "$ref": "#/definitions/menuGroup" } },
+        "items": { "type": "array", "maxItems": 40, "items": { "$ref": "#/definitions/menuItem" } }
+      }
+    },
+    "homepage": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "sections": { "type": "array", "maxItems": 20, "items": { "$ref": "#/definitions/section" } }
+      }
+    },
+    "components": {
+      "type": "object",
+      "properties": {
+        "style_preset": { "enum": ["modern", "minimal", "rounded", "material", "compact", "premium"] },
+        "card_radius": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "button_radius": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "card_style": { "enum": ["flat", "outlined", "elevated"] },
+        "button_style": { "enum": ["solid", "outline", "pill"] },
+        "image_ratio": { "enum": ["1:1", "4:3", "16:9", "3:2"] },
+        "shadow": { "enum": ["none", "soft", "medium", "strong"] },
+        "card_spacing": { "type": "integer", "minimum": 0, "maximum": 40 },
+        "section_spacing": { "type": "integer", "minimum": 0, "maximum": 48 },
+        "content_width": { "type": "integer", "minimum": 70, "maximum": 100 },
+        "icon_style": { "enum": ["rounded", "outline", "filled"] },
+        "show_dividers": { "type": "boolean" }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "properties": {
+        "font_family": { "$ref": "#/definitions/font" },
+        "heading_font": { "$ref": "#/definitions/font" },
+        "body_font": { "$ref": "#/definitions/font" },
+        "base_size": { "type": "integer", "minimum": 11, "maximum": 20 },
+        "heading_scale": { "type": "number", "minimum": 1, "maximum": 1.7 },
+        "button_weight": { "type": "integer", "minimum": 400, "maximum": 800 },
+        "line_height": { "type": "number", "minimum": 1.15, "maximum": 2 },
+        "letter_spacing": { "type": "number", "minimum": -1, "maximum": 2 }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "properties": {
+        "page_padding": { "type": "integer", "minimum": 8, "maximum": 32 },
+        "section_gap": { "type": "integer", "minimum": 8, "maximum": 48 },
+        "max_width": { "type": "integer", "minimum": 320, "maximum": 800 },
+        "safe_area": { "type": "boolean" },
+        "bottom_nav_height": { "type": "integer", "minimum": 48, "maximum": 88 }
+      }
+    }
+  },
+  "definitions": {
+    "color": { "type": "string", "pattern": "^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$" },
+    "palette": {
+      "type": "object",
+      "properties": {
+        "primary_color": { "$ref": "#/definitions/color" },
+        "secondary_color": { "$ref": "#/definitions/color" },
+        "accent_color": { "$ref": "#/definitions/color" },
+        "background_color": { "$ref": "#/definitions/color" },
+        "card_color": { "$ref": "#/definitions/color" },
+        "text_color": { "$ref": "#/definitions/color" },
+        "heading_color": { "$ref": "#/definitions/color" },
+        "button_color": { "$ref": "#/definitions/color" },
+        "button_text_color": { "$ref": "#/definitions/color" },
+        "border_color": { "$ref": "#/definitions/color" },
+        "status_bar_color": { "$ref": "#/definitions/color" },
+        "navigation_bar_color": { "$ref": "#/definitions/color" }
+      }
+    },
+    "font": { "enum": ["system", "arial", "georgia", "verdana", "trebuchet", "tahoma", "times", "courier"] },
+    "icon": { "enum": ["home", "menu", "search", "bell", "cart", "user", "grid", "link", "star", "heart", "info", "phone", "mail", "whatsapp", "settings", "image", "chevron-right", "more", "website", "shop", "bag", "calendar", "location", "play"] },
+    "menuType": { "enum": ["home", "website", "page", "category", "external", "custom", "contact", "whatsapp", "account", "cart"] },
+    "navItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string", "maxLength": 40 },
+        "icon": { "$ref": "#/definitions/icon" },
+        "type": { "$ref": "#/definitions/menuType" },
+        "url": { "type": "string" },
+        "visible": { "type": "boolean" }
+      }
+    },
+    "menuGroup": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string", "maxLength": 40 }
+      }
+    },
+    "menuItem": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string", "maxLength": 40 },
+        "icon": { "$ref": "#/definitions/icon" },
+        "type": { "$ref": "#/definitions/menuType" },
+        "url": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "group": { "type": "string" }
+      }
+    },
+    "section": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "enum": ["hero", "slider", "welcome", "featured_links", "quick_actions", "categories", "products", "featured_content", "latest_posts", "promo", "image_cards", "custom_html", "contact"] },
+        "enabled": { "type": "boolean" },
+        "title": { "type": "string", "maxLength": 120 },
+        "subtitle": { "type": "string", "maxLength": 200 },
+        "text": { "type": "string", "maxLength": 5000 },
+        "image_url": { "type": "string" },
+        "link_url": { "type": "string" },
+        "button_label": { "type": "string", "maxLength": 40 },
+        "layout": { "enum": ["default", "grid", "list", "carousel", "split", "overlay"] },
+        "items": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string", "maxLength": 80 },
+              "title": { "type": "string", "maxLength": 120 },
+              "subtitle": { "type": "string", "maxLength": 200 },
+              "text": { "type": "string", "maxLength": 500 },
+              "url": { "type": "string" },
+              "image_url": { "type": "string" },
+              "icon": { "$ref": "#/definitions/icon" },
+              "meta": { "type": "string", "maxLength": 80 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

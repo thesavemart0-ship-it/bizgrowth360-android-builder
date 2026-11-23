@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <meta name="theme-color" content="#2563EB">
   <title>Demo Website App</title>
   <link rel="stylesheet" href="app.css">
   <style>
@@ -20,6 +21,7 @@
       padding: 0;
       -webkit-tap-highlight-color: transparent;
     }
+    [hidden] { display: none !important; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--bg-color);
@@ -34,10 +36,18 @@
       overflow: hidden;
       user-select: none;
     }
+    body.bg360-shell-active {
+      display: block;
+      padding: 0;
+      overflow: hidden;
+      background: var(--bg360-bg, #FFFFFF);
+      color: var(--bg360-text, #111827);
+      text-align: left;
+    }
   </style>
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-container" id="bg360-legacy-shell">
     <!-- Brand / Logo Section -->
     <div class="brand-section">
       <div class="logo-wrapper">
@@ -89,6 +99,8 @@
       </button>
     </div>
   </div>
+
+  <div id="bg360-app-shell" class="bg360-shell" hidden></div>
 
   <script src="app-config.js"></script>
   <script src="app.js"></script>

@@ -19,6 +19,7 @@ Each build supplies its own:
 - Custom icon and splash image (HTTPS URL or repo-relative path)
 - APK / AAB / both, release or debug
 - External-link policy and status-bar visibility
+- Full **App Design Studio**: themes/presets, header, navigation, menu, homepage sections, components, typography, live preview and versioned design payload applied to the real APK shell
 
 Every build:
 
@@ -143,7 +144,7 @@ The bundled Capacitor shell shows a branded loader/offline screen, then navigate
 │   ├── generate-icons.js             # Icons, adaptive icons, splash
 │   └── validate-output.js            # APK/AAB + aapt2 verification
 ├── tests/
-│   ├── unit.test.js                  # 28 unit/isolation/concurrency tests
+│   ├── unit.test.js                  # 34 unit/isolation/concurrency tests
 │   └── integration.test.js           # Verifies two real builds
 ├── docs/
 └── README.md
@@ -204,4 +205,5 @@ No WordPress API is implemented in Phase 3.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common errors
 - [docs/SIGNING.md](docs/SIGNING.md) — keystore generation
 - [docs/VERIFICATION.md](docs/VERIFICATION.md) — Phase 3 test results and remaining verification
+- [docs/DESIGN_STUDIO.md](docs/DESIGN_STUDIO.md) — Phase 5 Design Studio architecture, schema, security and limitations
 - [docs/HOSTINGER_DEPLOYMENT.md](docs/HOSTINGER_DEPLOYMENT.md) — Hostinger plugin deployment record

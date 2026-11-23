@@ -942,6 +942,11 @@
 	}
 
 	function handleChange(event) {
+		if (event.target && event.target.id === 'bg360-preview-size-panel') {
+			previewSize = event.target.value;
+			renderPreview();
+			return;
+		}
 		var input = event.target.closest('[data-path]');
 		if (!input) {
 			return;
@@ -1012,6 +1017,10 @@
 		var saveButton = event.target.closest('#bg360-design-save-btn, #bg360-design-save-btn-2');
 		if (saveButton) {
 			saveDesign(false);
+			return;
+		}
+		if (event.target.closest('#bg360-design-discard-btn')) {
+			discardChanges();
 			return;
 		}
 		var mediaButton = event.target.closest('[data-media-path]');
@@ -1463,6 +1472,10 @@
 		var select = document.getElementById('bg360-reset-section');
 		var section = select ? select.value : '';
 		if (!window.confirm(section ? DS.strings.confirm_section : DS.strings.confirm_reset)) return;
+		performReset(section);
+	}
+
+	function performReset( section ) {
 		var payload = new URLSearchParams();
 		payload.set('action', 'bizgrowth360_reset_design');
 		payload.set('nonce', DS.nonce);
@@ -1495,7 +1508,7 @@
 		if (!window.confirm(DS.strings.confirm_reset)) return;
 		var select = document.getElementById('bg360-reset-section');
 		if (select) select.value = '';
-		resetSection();
+		performReset('');
 	}
 
 	function showToast(message, isError) {
@@ -1548,7 +1561,12 @@
 			});
 		}
 		window.bg360DesignStudio = {
-			save: function () { return saveDesign(true); },
+			save: function () {
+				if (!dirty) {
+					return Promise.resolve(true);
+				}
+				return saveDesign(true);
+			},
 			isDirty: function () { return dirty; }
 		};
 		// Re-render when the Design Studio tab becomes visible.

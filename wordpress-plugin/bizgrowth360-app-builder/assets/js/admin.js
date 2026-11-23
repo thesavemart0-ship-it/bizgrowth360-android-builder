@@ -307,28 +307,43 @@
 
 		startTimer();
 
-		var postData = collectFormData();
-		postData.action = 'bizgrowth360_start_build';
-		postData.build_type = target;
+		var saveDesignFirst = Promise.resolve(true);
+		if (window.bg360DesignStudio && typeof window.bg360DesignStudio.save === 'function') {
+			saveDesignFirst = window.bg360DesignStudio.save();
+		}
 
-		$.post(bizgrowth360AppBuilder.ajax_url, postData).done(function (res) {
-			if (res.success) {
-				activeBuildId = res.data.build_id;
-				$('#bg360-meta-run-id').text(activeBuildId);
-				$('#bg360-meta-event').text(target.toUpperCase());
-				showNotice(res.data.message, 'success');
-				setTimeout(startPolling, 3000);
-			} else {
+		saveDesignFirst.then(function (saved) {
+			if (saved === false) {
 				stopTimer();
-				updateBuildStatus('failed', 'Dispatch Failed');
+				updateBuildStatus('failed', 'Design Not Saved');
 				$('#bg360-cancel-build-btn').hide();
-				showNotice(res.data.message || 'Build trigger failed.', 'error');
+				showNotice('Design changes could not be saved. Please retry before starting the build.', 'error');
+				return;
 			}
-		}).fail(function () {
-			stopTimer();
-			updateBuildStatus('failed', 'Network Error');
-			$('#bg360-cancel-build-btn').hide();
-			showNotice('Network error dispatching build request.', 'error');
+
+			var postData = collectFormData();
+			postData.action = 'bizgrowth360_start_build';
+			postData.build_type = target;
+
+			$.post(bizgrowth360AppBuilder.ajax_url, postData).done(function (res) {
+				if (res.success) {
+					activeBuildId = res.data.build_id;
+					$('#bg360-meta-run-id').text(activeBuildId);
+					$('#bg360-meta-event').text(target.toUpperCase());
+					showNotice(res.data.message, 'success');
+					setTimeout(startPolling, 3000);
+				} else {
+					stopTimer();
+					updateBuildStatus('failed', 'Dispatch Failed');
+					$('#bg360-cancel-build-btn').hide();
+					showNotice(res.data.message || 'Build trigger failed.', 'error');
+				}
+			}).fail(function () {
+				stopTimer();
+				updateBuildStatus('failed', 'Network Error');
+				$('#bg360-cancel-build-btn').hide();
+				showNotice('Network error dispatching build request.', 'error');
+			});
 		});
 	}
 

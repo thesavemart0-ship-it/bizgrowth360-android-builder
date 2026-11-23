@@ -32,8 +32,16 @@ const {
 const {
   buildTasks,
   downloadAsset,
-  loadConfiguration
+  loadConfiguration,
+  loadDesign
 } = require('../scripts/build-app');
+const {
+  defaultDesign,
+  validateDesign,
+  sanitizeDesign,
+  applyDesignToConfig,
+  designSummary
+} = require('../scripts/design-config');
 const { validateApk, validateAab, inspectZipArchive } = require('../scripts/validate-output');
 
 const BASE_CONFIG = {
@@ -580,6 +588,147 @@ test('concurrent builds do not leak configuration or assets', async () => {
     assert.ok(colors.includes(own.primary_color));
     assert.ok(!colors.includes(other.primary_color));
   }
+});
+
+// ---------------------------------------------------------------------------
+// Design Studio configuration
+// ---------------------------------------------------------------------------
+
+test('design defaults are seeded from app colors', () => {
+  const design = defaultDesign({ primary_color: '#123456', background_color: '#FAFAFA', status_bar_color: '#111111', navigation_bar_color: '#EEEEEE' });
+  assert.equal(design.schema_version, 1);
+  assert.equal(design.theme.primary_color, '#123456');
+  assert.equal(design.theme.status_bar_color, '#111111');
+  assert.equal(design.navigation.type, 'none');
+  assert.equal(design.homepage.enabled, false);
+});
+
+test('design validation rejects malformed JSON and sanitizes unsafe values', () => {
+  const malformed = validateDesign('{not json');
+  assert.equal(malformed.valid, false);
+
+  const result = validateDesign({
+    schema_version: 99,
+    theme: { primary_color: 'red', accent_color: '#abc', mode: 'dark' },
+    navigation: {
+      type: 'bottom',
+      items: Array.from({ length: 12 }, (_, i) => ({ label: 'Item ' + i, type: 'website', url: 'https://example.com', visible: true }))
+    },
+    menu: {
+      groups: [{ id: 'main', label: 'Main' }],
+      items: [
+        { label: 'Home', type: 'home', group: 'missing', enabled: true },
+        { label: 'Bad', type: 'website', url: 'javascript:alert(1)' }
+      ]
+    },
+    homepage: {
+      enabled: true,
+      sections: [
+        { type: 'welcome', title: 'Hello', enabled: true },
+        { type: 'custom_html', text: '<p>Safe</p><script>alert(1)</script><a href="javascript:evil()" onclick="x()">x</a>' }
+      ]
+    },
+    components: { card_radius: 999, style_preset: 'bad' },
+    typography: { body_font: 'comic-sans', base_size: 100 },
+    layout: { page_padding: 999, max_width: 10 }
+  }, BASE_CONFIG);
+
+  assert.equal(result.valid, true, result.errors.join('; '));
+  const d = result.design;
+  assert.equal(d.schema_version, 1);
+  assert.equal(d.theme.primary_color, '#7C3AED');
+  assert.equal(d.theme.accent_color, '#AABBCC');
+  assert.equal(d.navigation.items.length, 8);
+  assert.equal(d.menu.items[0].group, 'main');
+  assert.equal(d.menu.items[1].url, '');
+  assert.equal(d.homepage.sections.length, 2);
+  assert.ok(!/script/i.test(d.homepage.sections[1].text));
+  assert.ok(!/onclick/i.test(d.homepage.sections[1].text));
+  assert.ok(!/javascript:/i.test(d.homepage.sections[1].text));
+  assert.equal(d.components.card_radius, 32);
+  assert.equal(d.components.style_preset, 'modern');
+  assert.equal(d.typography.body_font, 'system');
+  assert.equal(d.typography.base_size, 20);
+  assert.equal(d.layout.page_padding, 32);
+  assert.equal(d.layout.max_width, 320);
+});
+
+test('design URLs allow app pages and reject dangerous schemes', () => {
+  const result = validateDesign({
+    navigation: {
+      type: 'bottom',
+      items: [
+        { label: 'Home', type: 'home', url: 'app:home', visible: true },
+        { label: 'Menu', type: 'custom', url: 'app:menu', visible: true },
+        { label: 'Bad app', type: 'custom', url: 'app:evil', visible: true },
+        { label: 'Bad js', type: 'custom', url: 'javascript:alert(1)', visible: true },
+        { label: 'Phone', type: 'contact', url: 'tel:+911234567890', visible: true }
+      ]
+    }
+  }, BASE_CONFIG);
+  const items = result.design.navigation.items;
+  assert.equal(items[0].url, 'app:home');
+  assert.equal(items[1].url, 'app:menu');
+  assert.equal(items[2].url, '');
+  assert.equal(items[3].url, '');
+  assert.equal(items[4].url, 'tel:+911234567890');
+});
+
+test('DESIGN_JSON environment payload is accepted by the build engine', () => {
+  const previous = process.env.DESIGN_JSON;
+  process.env.DESIGN_JSON = JSON.stringify({
+    schema_version: 1,
+    theme: { mode: 'dark', primary_color: '#A78BFA' },
+    navigation: { type: 'bottom', items: [{ id: 'n1', label: 'Home', icon: 'home', type: 'home', visible: true }] }
+  });
+  try {
+    const result = loadDesign({}, BASE_CONFIG);
+    assert.equal(result.valid, true);
+    assert.equal(result.design.theme.mode, 'dark');
+    assert.equal(result.design.navigation.type, 'bottom');
+  } finally {
+    if (previous === undefined) delete process.env.DESIGN_JSON;
+    else process.env.DESIGN_JSON = previous;
+  }
+});
+
+test('design palette is applied to Android build config', () => {  const design = sanitizeDesign({
+    theme: {
+      mode: 'light',
+      primary_color: '#7C3AED',
+      background_color: '#F8F7FF',
+      status_bar_color: '#5B21B6',
+      navigation_bar_color: '#FFFFFF'
+    }
+  }, BASE_CONFIG);
+  const effective = applyDesignToConfig({ ...BASE_CONFIG, splash_background_color: '#FFFFFF' }, design);
+  assert.equal(effective.primary_color, '#7C3AED');
+  assert.equal(effective.background_color, '#F8F7FF');
+  assert.equal(effective.status_bar_color, '#5B21B6');
+  assert.equal(effective.navigation_bar_color, '#FFFFFF');
+
+  const summary = designSummary(design);
+  assert.equal(summary.schema_version, 1);
+  assert.equal(summary.navigation_type, 'none');
+});
+
+test('prepare-app embeds the design config and design.json in the app shell', () => {
+  const { project } = createProjectFixture('design-prepare');
+  const design = sanitizeDesign({
+    homepage: { enabled: true, sections: [{ id: 's1', type: 'hero', title: 'Hello' }] },
+    navigation: { type: 'bottom', items: [{ id: 'n1', label: 'Home', icon: 'home', type: 'home', visible: true }] }
+  }, BASE_CONFIG);
+  prepareApp({
+    projectDir: project,
+    config: { ...BASE_CONFIG, primary_color: '#7C3AED', background_color: '#F8F7FF' },
+    design
+  });
+  const appConfig = fs.readFileSync(path.join(project, 'public/app-config.js'), 'utf8');
+  assert.ok(appConfig.includes('design: {'));
+  assert.ok(appConfig.includes('"schema_version":1'));
+  const designFile = JSON.parse(fs.readFileSync(path.join(project, 'public/design.json'), 'utf8'));
+  assert.equal(designFile.schema_version, 1);
+  assert.equal(designFile.homepage.sections[0].title, 'Hello');
 });
 
 // ---------------------------------------------------------------------------

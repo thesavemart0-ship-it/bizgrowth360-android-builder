@@ -135,6 +135,7 @@ function prepareApp(options = {}) {
   }
 
   const config = validation.normalizedConfig;
+  const design = options.design && typeof options.design === 'object' ? options.design : null;
   const website = new URL(config.website_url);
   const websiteHost = website.hostname;
 
@@ -211,7 +212,8 @@ window.APP_CONFIG = {
   navigationBarColor: ${JSON.stringify(config.navigation_bar_color)},
   orientation: ${JSON.stringify(config.orientation)},
   allowExternalLinks: ${config.allow_external_links},
-  enableStatusBar: ${config.enable_status_bar}
+  enableStatusBar: ${config.enable_status_bar},
+  design: ${JSON.stringify(design || {})}
 };
 `;
 
@@ -221,6 +223,18 @@ window.APP_CONFIG = {
   ]) {
     if (fs.existsSync(path.dirname(configPathOut))) {
       fs.writeFileSync(configPathOut, appConfigJsContent, 'utf8');
+    }
+  }
+
+  if (design) {
+    const designJson = JSON.stringify(design, null, 2);
+    for (const designPathOut of [
+      path.join(projectDir, 'src', 'design.json'),
+      path.join(projectDir, 'public', 'design.json')
+    ]) {
+      if (fs.existsSync(path.dirname(designPathOut))) {
+        fs.writeFileSync(designPathOut, designJson, 'utf8');
+      }
     }
   }
   console.log('[OK] Injected runtime configuration into src/ & public/');

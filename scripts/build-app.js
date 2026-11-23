@@ -31,6 +31,7 @@ const {
 const { prepareApp } = require('./prepare-app');
 const { generateIcons, validateImageAsset } = require('./generate-icons');
 const { validateApk, validateAab, computeSha256 } = require('./validate-output');
+const { validateDesign, applyDesignToConfig, designSummary } = require('./design-config');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const TEMPLATE_DIR = path.join(ROOT_DIR, 'app-template');
@@ -89,7 +90,8 @@ function parseArgs(argv) {
     '--background-color': 'backgroundColor',
     '--orientation': 'orientation',
     '--icon-url': 'iconUrl',
-    '--splash-url': 'splashUrl'
+    '--splash-url': 'splashUrl',
+    '--design-json': 'designJson'
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -211,6 +213,22 @@ function loadConfiguration(options) {
   if (options.splashUrl) config.splash_url = options.splashUrl;
 
   return applyEnvOverrides(config);
+}
+
+function loadDesign(options, appConfig) {
+  let raw = options.design;
+  if (raw === undefined) {
+    const envDesign = envValue('DESIGN_JSON');
+    if (envDesign) raw = envDesign;
+  }
+  if (raw === undefined && options.designJson) raw = options.designJson;
+  if (raw === undefined && appConfig && appConfig.design !== undefined) raw = appConfig.design;
+
+  const result = validateDesign(raw === undefined ? null : raw, appConfig || {});
+  if (!result.valid) {
+    throw new Error(`Design configuration validation failed:\n  - ${result.errors.join('\n  - ')}`);
+  }
+  return result;
 }
 
 function verifyTemplate() {
@@ -512,6 +530,13 @@ function writeSummary(outputDir, summary) {
   lines.push(`| **Version** | \`${escapeMarkdown(summary.config.version_name)} (code ${summary.config.version_code})\` |`);
   lines.push(`| **Build Type** | \`${escapeMarkdown(summary.build.type)} / ${escapeMarkdown(summary.build.variant)}\` |`);
   lines.push(`| **Orientation** | \`${escapeMarkdown(summary.config.orientation)}\` |`);
+  if (summary.design) {
+    lines.push(
+      `| **Design Studio** | \`v${summary.design.schema_version} · ${summary.design.theme_mode} · ` +
+      `${summary.design.homepage_sections} section(s) · ${summary.design.navigation_items} nav · ` +
+      `${summary.design.menu_items} menu\` |`
+    );
+  }
   lines.push(`| **Signing** | ${escapeMarkdown(summary.signing.status)} |`);
   lines.push(`| **APK** | ${summary.artifacts.apk ? '✅ Generated' : '— Not requested'} |`);
   lines.push(`| **AAB** | ${summary.artifacts.aab ? '✅ Generated' : '— Not requested'} |`);
@@ -549,7 +574,7 @@ function writeSummary(outputDir, summary) {
   return jsonPath;
 }
 
-function createBaseSummary({ buildId, config, buildType, buildVariant, configSource, startedAt }) {
+function createBaseSummary({ buildId, config, buildType, buildVariant, configSource, startedAt, design }) {
   return {
     schemaVersion: 1,
     buildId,
@@ -558,6 +583,7 @@ function createBaseSummary({ buildId, config, buildType, buildVariant, configSou
     finishedAt: null,
     durationSeconds: null,
     configSource,
+    design: design ? designSummary(design) : null,
     config: {
       app_name: config.app_name,
       package_id: config.package_id,
@@ -635,29 +661,36 @@ async function buildApp(options = {}) {
     // ---------------------------------------------------------------
     const rawConfig = loadConfiguration(options);
     const validation = validateConfig(rawConfig);
-    const buildType = validation.normalizedConfig.build_type;
-    const buildVariant = validation.normalizedConfig.build_variant;
+    const designResult = loadDesign(options, rawConfig);
+    const design = designResult.design;
+    const effectiveConfig = applyDesignToConfig(validation.normalizedConfig, design);
+    const buildType = effectiveConfig.build_type;
+    const buildVariant = effectiveConfig.build_variant;
     summary = createBaseSummary({
       buildId,
-      config: validation.normalizedConfig,
+      config: effectiveConfig,
       buildType,
       buildVariant,
       configSource,
-      startedAt
+      startedAt,
+      design
     });
     summary.validation.checks = [];
 
     addCheck(summary, 'Configuration schema', validation.valid, validation.valid
       ? 'All required fields are present and valid.'
       : validation.errors.join('; '));
-    for (const warning of validation.warnings) {
+    addCheck(summary, 'Design Studio schema', designResult.valid,
+      `v${design.schema_version}, ${design.homepage.sections.length} section(s), ` +
+      `${design.navigation.items.length} navigation item(s), ${design.menu.items.length} menu item(s).`);
+    for (const warning of validation.warnings.concat(designResult.warnings)) {
       addCheck(summary, 'Configuration warning', true, warning);
     }
     if (!validation.valid) {
       throw new Error(`Configuration validation failed:\n  - ${validation.errors.join('\n  - ')}`);
     }
 
-    const config = validation.normalizedConfig;
+    const config = effectiveConfig;
     console.log('\n--- Validated configuration ---');
     console.log(JSON.stringify(config, null, 2));
 
@@ -714,7 +747,7 @@ async function buildApp(options = {}) {
     // ---------------------------------------------------------------
     // 5. Apply configuration + generate resources
     // ---------------------------------------------------------------
-    const preparedConfig = prepareApp({ projectDir: workspaceProjectDir, config });
+    const preparedConfig = prepareApp({ projectDir: workspaceProjectDir, config, design });
     addCheck(summary, 'Configuration applied', true,
       'capacitor.config, app-config.js, strings.xml, colors.xml, styles.xml, manifest, Gradle and MainActivity updated.');
 
@@ -751,6 +784,7 @@ async function buildApp(options = {}) {
     const assetReport = await generateIcons({
       projectDir: workspaceProjectDir,
       config: preparedConfig,
+      design,
       iconPath,
       splashPath
     });
@@ -954,6 +988,7 @@ if (require.main === module) {
 module.exports = {
   buildApp,
   loadConfiguration,
+  loadDesign,
   parseArgs,
   buildTasks,
   downloadAsset,

@@ -564,7 +564,14 @@ class DesignConfig {
 	 */
 	private function color( $value, $fallback ) {
 		$color = is_string( $value ) ? sanitize_hex_color( $value ) : null;
-		return $color ? strtoupper( $color ) : $fallback;
+		if ( ! $color ) {
+			return $fallback;
+		}
+		$color = strtoupper( $color );
+		if ( 4 === strlen( $color ) ) {
+			$color = '#' . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
+		}
+		return $color;
 	}
 
 	/**
@@ -588,9 +595,12 @@ class DesignConfig {
 		}
 
 		$scheme = strtolower( (string) wp_parse_url( $value, PHP_URL_SCHEME ) );
-		$allowed = array( 'http', 'https', 'mailto', 'tel', 'sms', 'whatsapp' );
+		$allowed = array( 'http', 'https', 'mailto', 'tel', 'sms', 'whatsapp', 'app' );
 		if ( ! in_array( $scheme, $allowed, true ) ) {
 			return '';
+		}
+		if ( 'app' === $scheme ) {
+			return in_array( $value, array( 'app:home', 'app:menu', 'app:website' ), true ) ? $value : '';
 		}
 
 		return esc_url_raw( $value, $allowed );
@@ -651,7 +661,10 @@ class DesignConfig {
 			'br'         => array(),
 		);
 
-		return wp_kses( $html, $allowed );
+		$clean = wp_kses( $html, $allowed );
+		// Never allow a serialized payload to terminate the admin inline JSON script.
+		$clean = str_ireplace( array( '</script', '<!--', '<![CDATA[' ), array( '&lt;/script', '&lt;!--', '&lt;![CDATA[' ), $clean );
+		return $clean;
 	}
 
 	private function icon( $value ) {

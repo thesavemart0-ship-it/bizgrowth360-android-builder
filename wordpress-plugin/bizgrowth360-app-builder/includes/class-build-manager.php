@@ -241,6 +241,7 @@ class BuildManager {
 			'splash_url'             => (string) ( $config['splash_url'] ?? '' ),
 			'allow_external_links'   => $config['allow_external_links'] ? 'true' : 'false',
 			'enable_status_bar'      => $config['enable_status_bar'] ? 'true' : 'false',
+			'design_json'            => $design_json,
 			'config_file'            => 'config/default-app.json',
 		);
 
