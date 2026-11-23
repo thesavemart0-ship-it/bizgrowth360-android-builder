@@ -206,8 +206,8 @@ class BuildManager {
 		$ios_mode = sanitize_key( $inputs['ios_mode'] ?? 'ipa' );
 		$sanitized['ios_mode'] = in_array( $ios_mode, array( 'ipa', 'validation' ), true ) ? $ios_mode : 'ipa';
 
-		$macos_runner = sanitize_key( $inputs['macos_runner'] ?? 'macos-14' );
-		$sanitized['macos_runner'] = in_array( $macos_runner, array( 'macos-14', 'macos-15' ), true ) ? $macos_runner : 'macos-14';
+		$macos_runner = sanitize_key( $inputs['macos_runner'] ?? 'macos-15' );
+		$sanitized['macos_runner'] = in_array( $macos_runner, array( 'macos-15' ), true ) ? $macos_runner : 'macos-15';
 
 		$sanitized['ios_upload_testflight'] = ! empty( $inputs['ios_upload_testflight'] );
 		$sanitized['confirm_app_store_upload'] = ! empty( $inputs['confirm_app_store_upload'] );

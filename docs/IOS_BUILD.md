@@ -9,19 +9,19 @@ configuration.
 
 ```
 WordPress App Builder (Settings + Build Center)
-        │  workflow_dispatch (non-sensitive inputs only)
-        ├── android-build.yml  ── ubuntu-latest ── Gradle ── APK / AAB
-        └── ios-build.yml      ── macOS runner  ── Xcode ── signed IPA
-                                              │
-                                              └── optional TestFlight upload
+        |  workflow_dispatch (non-sensitive inputs only)
+        +-- android-build.yml  -- ubuntu-latest -- Gradle -- APK / AAB
+        +-- ios-build.yml      -- macOS runner  -- Xcode  -- signed IPA
+                                              |
+                                              +-- optional TestFlight upload
 
 scripts/build-ios.js
-  ├── copyTemplate()          isolated workspace; shared template untouched
-  ├── prepare-ios.js          Info.plist, entitlements, pbxproj, icons, splash
-  ├── capacitor sync ios      web assets + native plugins + CocoaPods
-  ├── xcodebuild archive      Release archive with manual signing
-  ├── xcodebuild -exportArchive
-  └── validate-ipa.js         ZIP structure, metadata, codesign (macOS)
+  +-- copyTemplate()          isolated workspace; shared template untouched
+  +-- prepare-ios.js          Info.plist, entitlements, pbxproj, icons, splash
+  +-- capacitor sync ios      web assets + native plugins + CocoaPods
+  +-- xcodebuild archive      Release archive with manual signing
+  +-- xcodebuild -exportArchive
+  +-- validate-ipa.js         ZIP structure, metadata, codesign (macOS)
 ```
 
 The iOS workflow is `workflow_dispatch` only. It never runs on push, which
@@ -44,7 +44,7 @@ registered in the Apple Developer portal.
 
 ## GitHub Actions secrets
 
-Configure these under **Repository → Settings → Secrets and variables →
+Configure these under **Repository -> Settings -> Secrets and variables ->
 Actions**. Never store them in WordPress options, workflow files, source code,
 build logs or artifacts.
 
@@ -89,15 +89,15 @@ intentional: the plugin never claims a signed IPA when signing failed.
 
 ### From WordPress
 
-1. Open **App Builder → App Configuration**.
+1. Open **App Builder -> App Configuration**.
 2. Select **Target Platform** = iOS or Android + iOS and fill in the iOS bundle
    ID, Team ID (optional), export method, build mode and runner.
 3. Save the configuration.
 4. Use **Build iOS IPA** or **Build All Platforms** in the header.
 5. Review the confirmation modal. For App Store builds with TestFlight enabled,
    tick the per-build TestFlight confirmation checkbox.
-6. Track stages in **Build Center**: Queued → Preparing → Building → Signing →
-   Exporting → Uploading → Completed/Failed/Cancelled.
+6. Track stages in **Build Center**: Queued -> Preparing -> Building -> Signing ->
+   Exporting -> Uploading -> Completed/Failed/Cancelled.
 
 ### From GitHub Actions
 
@@ -129,8 +129,8 @@ TestFlight upload requires **all** of the following:
 
 - Build mode `ipa`.
 - Export method `app-store`.
-- Plugin setting “Allow a TestFlight upload option” enabled.
-- Per-build “Upload this signed IPA to TestFlight” confirmation checked.
+- Plugin setting "Allow a TestFlight upload option" enabled.
+- Per-build "Upload this signed IPA to TestFlight" confirmation checked.
 - App Store Connect API key, key ID and issuer ID configured as secrets.
 
 The workflow validates the IPA with `altool --validate-app` and then uploads it
@@ -140,7 +140,7 @@ manually by the account owner in App Store Connect.
 
 ## Cost and runner management
 
-- iOS builds use `macos-14` or `macos-15` GitHub-hosted runners.
+- iOS builds use `macos-15` GitHub-hosted runners (verified with Xcode 16.4).
 - macOS minutes are billed at a higher rate than Linux minutes.
 - The workflow has a 45-minute timeout and a concurrency group per branch/app
   name to avoid duplicate runs.
@@ -200,11 +200,19 @@ At the time this document was written:
 - iOS project generation, Info.plist/entitlements generation, icon/splash
   generation, bundle ID validation, IPA structural validation and workflow
   security checks were tested locally.
-- A real signed IPA was **not** built because no Apple Developer certificate,
-  provisioning profile or macOS/Xcode environment was available.
+- A real macOS validation run completed successfully on `macos-15` with Xcode
+  16.4: run `45121266077` generated the project, synced Capacitor plugins,
+  installed CocoaPods, compiled `App.app` for the iOS Simulator and uploaded the
+  build summary/log artifact. It reported `IPA: Not generated` and did not claim
+  a signed IPA.
+- A real signed IPA was **not** built because no Apple Developer certificate or
+  provisioning profile was available.
 - A TestFlight upload was **not** performed because no App Store Connect API key
   was available.
 - Android unit tests and existing build tests were run to check for regressions.
+
+The `macos-14` label was not assigned a runner in this repository and the run was
+cancelled before any step executed. Use `macos-15`.
 
 Do not treat the iOS build as production-verified until a real macOS run
 produces a signed IPA and (optionally) a TestFlight upload with your credentials.

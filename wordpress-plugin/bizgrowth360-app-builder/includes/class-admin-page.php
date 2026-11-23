@@ -594,8 +594,7 @@ class AdminPage {
 										<th scope="row"><label for="bg360_macos_runner"><?php esc_html_e( 'macOS Runner', 'bizgrowth360-app-builder' ); ?></label></th>
 										<td>
 											<select id="bg360_macos_runner" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[macos_runner]">
-												<option value="macos-14" <?php selected( $options['macos_runner'], 'macos-14' ); ?>>macos-14 (recommended)</option>
-												<option value="macos-15" <?php selected( $options['macos_runner'], 'macos-15' ); ?>>macos-15</option>
+												<option value="macos-15" <?php selected( $options['macos_runner'], 'macos-15' ); ?>>macos-15 (supported)</option>
 											</select>
 										</td>
 									</tr>
@@ -1059,7 +1058,7 @@ class AdminPage {
 						</div>
 
 						<p class="bg360-preview-note">
-							<?php esc_html_e( 'Live preview uses the current unsaved settings. The app header, menu and homepage render in the native app shell; pages you open from the website keep the website’s own layout.', 'bizgrowth360-app-builder' ); ?>
+							<?php esc_html_e( 'Live preview uses the current unsaved settings. The app header, menu and homepage render in the native app shell; pages you open from the website keep the websiteâ€™s own layout.', 'bizgrowth360-app-builder' ); ?>
 						</p>
 					</aside>
 				</div>
@@ -1133,7 +1132,7 @@ class AdminPage {
 								<span class="dashicons dashicons-bell bg360-card-icon"></span>
 								<div>
 									<h4><?php esc_html_e( 'Push Notifications (FCM)', 'bizgrowth360-app-builder' ); ?></h4>
-									<p class="description"><?php esc_html_e( 'Deliver real-time alerts and promotions directly to users’ Android devices using Firebase Cloud Messaging.', 'bizgrowth360-app-builder' ); ?></p>
+									<p class="description"><?php esc_html_e( 'Deliver real-time alerts and promotions directly to usersâ€™ Android devices using Firebase Cloud Messaging.', 'bizgrowth360-app-builder' ); ?></p>
 								</div>
 							</div>
 							<label class="bg360-switch">

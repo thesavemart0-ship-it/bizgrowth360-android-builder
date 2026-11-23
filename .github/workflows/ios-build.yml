@@ -85,9 +85,8 @@ on:
         required: true
         type: choice
         options:
-          - macos-14
           - macos-15
-        default: 'macos-14'
+        default: 'macos-15'
       orientation:
         description: 'Screen Orientation'
         required: true
@@ -161,7 +160,7 @@ permissions:
 jobs:
   build-ios:
     name: Dynamic iOS Build (${{ inputs.ios_mode }}/${{ inputs.ios_export_method }})
-    runs-on: ${{ inputs.macos_runner || 'macos-14' }}
+    runs-on: ${{ inputs.macos_runner || 'macos-15' }}
     timeout-minutes: 45
     concurrency:
       group: bizgrowth360-ios-${{ github.ref }}-${{ inputs.app_name || 'default' }}

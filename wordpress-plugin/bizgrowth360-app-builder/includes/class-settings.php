@@ -135,7 +135,7 @@ class Settings {
 			'ios_export_method'    => 'app-store',
 			'ios_mode'             => 'ipa',
 			'ios_upload_testflight' => false,
-			'macos_runner'         => 'macos-14',
+			'macos_runner'         => 'macos-15',
 		);
 	}
 
@@ -228,9 +228,7 @@ class Settings {
 			: 'app-store';
 		$sanitized['ios_mode'] = in_array( $input['ios_mode'] ?? 'ipa', array( 'ipa', 'validation' ), true ) ? $input['ios_mode'] : 'ipa';
 		$sanitized['ios_upload_testflight'] = ! empty( $input['ios_upload_testflight'] );
-		$sanitized['macos_runner'] = in_array( $input['macos_runner'] ?? 'macos-14', array( 'macos-14', 'macos-15' ), true )
-			? $input['macos_runner']
-			: 'macos-14';
+		$sanitized['macos_runner'] = 'macos-15';
 
 		return $sanitized;
 	}
