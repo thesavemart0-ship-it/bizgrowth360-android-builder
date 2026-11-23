@@ -61,18 +61,21 @@ class AdminPage {
 		wp_enqueue_style( 'wp-color-picker' );
 		wp_enqueue_script( 'wp-color-picker' );
 
+		$admin_css_ver = BIZGROWTH360_APP_BUILDER_VERSION . '.' . ( file_exists( BIZGROWTH360_APP_BUILDER_PATH . 'assets/css/admin.css' ) ? filemtime( BIZGROWTH360_APP_BUILDER_PATH . 'assets/css/admin.css' ) : time() );
+		$admin_js_ver  = BIZGROWTH360_APP_BUILDER_VERSION . '.' . ( file_exists( BIZGROWTH360_APP_BUILDER_PATH . 'assets/js/admin.js' ) ? filemtime( BIZGROWTH360_APP_BUILDER_PATH . 'assets/js/admin.js' ) : time() );
+
 		wp_enqueue_style(
 			'bizgrowth360-admin-css',
 			BIZGROWTH360_APP_BUILDER_URL . 'assets/css/admin.css',
 			array( 'wp-color-picker' ),
-			BIZGROWTH360_APP_BUILDER_VERSION
+			$admin_css_ver
 		);
 
 		wp_enqueue_script(
 			'bizgrowth360-admin-js',
 			BIZGROWTH360_APP_BUILDER_URL . 'assets/js/admin.js',
 			array( 'jquery', 'wp-color-picker' ),
-			BIZGROWTH360_APP_BUILDER_VERSION,
+			$admin_js_ver,
 			true
 		);
 
@@ -85,15 +88,20 @@ class AdminPage {
 				'download_base_url' => admin_url( 'admin-post.php?action=bizgrowth360_download_artifact' ),
 				'download_nonce'    => wp_create_nonce( 'bizgrowth360_download_artifact' ),
 				'has_token'         => Config::has_token(),
+				'ios_upload_testflight' => ! empty( $this->settings->get_options()['ios_upload_testflight'] ),
+				'ios_export_method' => $this->settings->get_options()['ios_export_method'] ?? 'app-store',
+				'ios_mode'          => $this->settings->get_options()['ios_mode'] ?? 'ipa',
 				'strings'           => array(
 					'service_not_configured' => __( 'Build service is not configured. Please define BIZGROWTH360_GITHUB_TOKEN in wp-config.php.', 'bizgrowth360-app-builder' ),
 					'triggering_build'       => __( 'Dispatching build request to cloud compiler...', 'bizgrowth360-app-builder' ),
 					'build_queued'           => __( 'Build queued! Awaiting cloud runner...', 'bizgrowth360-app-builder' ),
-					'build_in_progress'      => __( 'Compiling Android application in cloud runner...', 'bizgrowth360-app-builder' ),
-					'build_success'          => __( 'Build Succeeded! Android packages are ready for download.', 'bizgrowth360-app-builder' ),
+					'build_in_progress'      => __( 'Compiling your application in the cloud runner...', 'bizgrowth360-app-builder' ),
+					'build_success'          => __( 'Build Succeeded! Your packages are ready for download.', 'bizgrowth360-app-builder' ),
 					'build_failed'           => __( 'Build Failed. Please verify app configuration and retry.', 'bizgrowth360-app-builder' ),
 					'build_cancelled'        => __( 'Build was cancelled.', 'bizgrowth360-app-builder' ),
-					'confirm_build'          => __( 'Are you sure you want to trigger a new Android build now?', 'bizgrowth360-app-builder' ),
+					'confirm_build'          => __( 'Are you sure you want to trigger a new build now?', 'bizgrowth360-app-builder' ),
+					'ios_cost_warning'       => __( 'iOS builds use macOS GitHub runners and may consume GitHub Actions macOS minutes. Continue?', 'bizgrowth360-app-builder' ),
+					'ios_not_configured'     => __( 'The iOS workflow has not been configured in the build repository yet.', 'bizgrowth360-app-builder' ),
 					'select_icon'            => __( 'Select App Icon', 'bizgrowth360-app-builder' ),
 					'select_splash'          => __( 'Select Splash Image', 'bizgrowth360-app-builder' ),
 					'use_image'              => __( 'Use This Image', 'bizgrowth360-app-builder' ),
@@ -112,6 +120,7 @@ class AdminPage {
 				'summary'          => NativeFeatures::get_status_summary(),
 				'tokens_count'     => DeviceTokensDb::count_tokens(),
 				'assetlinks_url'   => home_url( '/.well-known/assetlinks.json' ),
+				'aasa_url'         => home_url( '/.well-known/apple-app-site-association' ),
 				'update_url'       => home_url( '/wp-json/bizgrowth360/v1/app-update' ),
 				'register_dev_url' => home_url( '/wp-json/bizgrowth360/v1/register-device' ),
 			)
@@ -120,18 +129,21 @@ class AdminPage {
 		$design_config = new DesignConfig();
 		$app_options   = $this->settings->get_options();
 
+		$design_css_ver = BIZGROWTH360_APP_BUILDER_VERSION . '.' . ( file_exists( BIZGROWTH360_APP_BUILDER_PATH . 'assets/css/design-studio.css' ) ? filemtime( BIZGROWTH360_APP_BUILDER_PATH . 'assets/css/design-studio.css' ) : time() );
+		$design_js_ver  = BIZGROWTH360_APP_BUILDER_VERSION . '.' . ( file_exists( BIZGROWTH360_APP_BUILDER_PATH . 'assets/js/design-studio.js' ) ? filemtime( BIZGROWTH360_APP_BUILDER_PATH . 'assets/js/design-studio.js' ) : time() );
+
 		wp_enqueue_style(
 			'bizgrowth360-design-studio-css',
 			BIZGROWTH360_APP_BUILDER_URL . 'assets/css/design-studio.css',
 			array( 'bizgrowth360-admin-css' ),
-			BIZGROWTH360_APP_BUILDER_VERSION
+			$design_css_ver
 		);
 
 		wp_enqueue_script(
 			'bizgrowth360-design-studio-js',
 			BIZGROWTH360_APP_BUILDER_URL . 'assets/js/design-studio.js',
 			array( 'jquery' ),
-			BIZGROWTH360_APP_BUILDER_VERSION,
+			$design_js_ver,
 			true
 		);
 
@@ -269,13 +281,18 @@ class AdminPage {
 		$build_id    = isset( $_GET['build_id'] ) ? sanitize_text_field( wp_unslash( $_GET['build_id'] ) ) : '';
 		$type        = isset( $_GET['type'] ) ? sanitize_key( $_GET['type'] ) : '';
 
+		if ( ! in_array( $type, array( '', 'apk', 'aab', 'ipa' ), true ) ) {
+			$type = '';
+		}
+
 		if ( ! $artifact_id && ! empty( $build_id ) ) {
 			$build = BuildDb::get_build( $build_id );
 			if ( $build && ! empty( $build->artifacts ) ) {
 				foreach ( $build->artifacts as $art ) {
 					$is_apk = false !== stripos( $art['name'], 'apk' );
 					$is_aab = false !== stripos( $art['name'], 'aab' );
-					if ( ( 'apk' === $type && $is_apk ) || ( 'aab' === $type && $is_aab ) ) {
+					$is_ipa = false !== stripos( $art['name'], 'ipa' );
+					if ( ( 'apk' === $type && $is_apk ) || ( 'aab' === $type && $is_aab ) || ( 'ipa' === $type && $is_ipa ) ) {
 						$artifact_id = absint( $art['id'] );
 						break;
 					}
@@ -315,24 +332,27 @@ class AdminPage {
 						<span class="dashicons dashicons-smartphone"></span>
 					</div>
 					<div>
-						<h1><?php esc_html_e( 'Bizgrowth360 Android App Builder', 'bizgrowth360-app-builder' ); ?></h1>
-						<p class="bizgrowth360-tagline"><?php esc_html_e( 'Convert your WordPress website into a native Android APK & Play Store AAB with one click.', 'bizgrowth360-app-builder' ); ?></p>
+						<h1><?php esc_html_e( 'Bizgrowth360 App Builder', 'bizgrowth360-app-builder' ); ?></h1>
+						<p class="bizgrowth360-tagline"><?php esc_html_e( 'Convert your WordPress website into Android APK/AAB and iOS IPA packages with one click.', 'bizgrowth360-app-builder' ); ?></p>
 					</div>
 				</div>
 				<div class="bizgrowth360-header-actions">
 					<span id="bg360-status-badge" class="bg360-badge bg360-badge-idle">
 						<span class="bg360-dot"></span> <?php esc_html_e( 'Engine Ready', 'bizgrowth360-app-builder' ); ?>
 					</span>
-					<!-- 3 Direct Build Buttons -->
+					<!-- Direct Build Buttons -->
 					<div class="bg360-build-button-group">
-						<button type="button" class="button button-secondary bg360-open-confirm-btn" data-build-target="apk">
+						<button type="button" class="button button-secondary bg360-open-confirm-btn" data-build-action="apk">
 							<span class="dashicons dashicons-smartphone"></span> <?php esc_html_e( 'Build APK', 'bizgrowth360-app-builder' ); ?>
 						</button>
-						<button type="button" class="button button-secondary bg360-open-confirm-btn" data-build-target="aab">
+						<button type="button" class="button button-secondary bg360-open-confirm-btn" data-build-action="aab">
 							<span class="dashicons dashicons-cloud-upload"></span> <?php esc_html_e( 'Build AAB', 'bizgrowth360-app-builder' ); ?>
 						</button>
-						<button type="button" class="button button-primary bg360-btn-large bg360-open-confirm-btn" data-build-target="both">
-							<span class="dashicons dashicons-controls-play"></span> <?php esc_html_e( 'Build Both', 'bizgrowth360-app-builder' ); ?>
+						<button type="button" class="button button-secondary bg360-open-confirm-btn" data-build-action="ios">
+							<span class="dashicons dashicons-apple"></span> <?php esc_html_e( 'Build iOS IPA', 'bizgrowth360-app-builder' ); ?>
+						</button>
+						<button type="button" class="button button-primary bg360-btn-large bg360-open-confirm-btn" data-build-action="all">
+							<span class="dashicons dashicons-controls-play"></span> <?php esc_html_e( 'Build All Platforms', 'bizgrowth360-app-builder' ); ?>
 						</button>
 					</div>
 				</div>
@@ -474,7 +494,18 @@ class AdminPage {
 
 								<table class="form-table">
 									<tr>
-										<th scope="row"><label for="bg360_build_target"><?php esc_html_e( 'Default Target', 'bizgrowth360-app-builder' ); ?></label></th>
+										<th scope="row"><label for="bg360_platform"><?php esc_html_e( 'Target Platform', 'bizgrowth360-app-builder' ); ?></label></th>
+										<td>
+											<select id="bg360_platform" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[platform]">
+												<option value="android" <?php selected( $options['platform'], 'android' ); ?>><?php esc_html_e( 'Android (APK / AAB)', 'bizgrowth360-app-builder' ); ?></option>
+												<option value="ios" <?php selected( $options['platform'], 'ios' ); ?>><?php esc_html_e( 'iOS (IPA)', 'bizgrowth360-app-builder' ); ?></option>
+												<option value="both" <?php selected( $options['platform'], 'both' ); ?>><?php esc_html_e( 'Android + iOS', 'bizgrowth360-app-builder' ); ?></option>
+											</select>
+											<p class="description"><?php esc_html_e( 'Used by "Save & Start Build". The header buttons override this selection for a single build.', 'bizgrowth360-app-builder' ); ?></p>
+										</td>
+									</tr>
+									<tr>
+										<th scope="row"><label for="bg360_build_target"><?php esc_html_e( 'Android Default Target', 'bizgrowth360-app-builder' ); ?></label></th>
 										<td>
 											<select id="bg360_build_target" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[build_target]">
 												<option value="both" <?php selected( $options['build_target'], 'both' ); ?>><?php esc_html_e( 'Both APK (Direct Install) & AAB (Play Store)', 'bizgrowth360-app-builder' ); ?></option>
@@ -515,9 +546,76 @@ class AdminPage {
 								</table>
 							</div>
 
+							<div class="bizgrowth360-card bg360-ios-card" id="bg360-ios-settings">
+								<h3><span class="dashicons dashicons-apple"></span> <?php esc_html_e( 'iOS / Apple Build Settings', 'bizgrowth360-app-builder' ); ?></h3>
+
+								<div class="notice notice-warning inline bg360-ios-cost-warning">
+									<p>
+										<strong><?php esc_html_e( 'macOS runner cost warning:', 'bizgrowth360-app-builder' ); ?></strong>
+										<?php esc_html_e( 'iOS builds compile on GitHub-hosted macOS runners, which consume GitHub Actions macOS minutes and can cost significantly more than Android builds. Signing certificates and App Store Connect keys are stored only as encrypted GitHub Actions secrets.', 'bizgrowth360-app-builder' ); ?>
+									</p>
+								</div>
+
+								<table class="form-table">
+									<tr>
+										<th scope="row"><label for="bg360_ios_bundle_id"><?php esc_html_e( 'iOS Bundle Identifier', 'bizgrowth360-app-builder' ); ?></label></th>
+										<td>
+											<input type="text" id="bg360_ios_bundle_id" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[ios_bundle_id]" value="<?php echo esc_attr( $options['ios_bundle_id'] ); ?>" class="regular-text" maxlength="155" pattern="^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$" />
+											<p class="description"><?php esc_html_e( 'Unique Apple bundle ID (e.g. in.bizgrowth360.mybusiness). Underscores are not allowed; it is separate from the Android package ID.', 'bizgrowth360-app-builder' ); ?></p>
+										</td>
+									</tr>
+									<tr>
+										<th scope="row"><label for="bg360_ios_team_id"><?php esc_html_e( 'Apple Team ID', 'bizgrowth360-app-builder' ); ?></label></th>
+										<td>
+											<input type="text" id="bg360_ios_team_id" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[ios_team_id]" value="<?php echo esc_attr( $options['ios_team_id'] ); ?>" class="regular-text code" maxlength="10" placeholder="ABCDE12345" />
+											<p class="description"><?php esc_html_e( 'Optional if the IOS_TEAM_ID GitHub secret is configured. The Team ID is not a secret and is embedded in the signed app.', 'bizgrowth360-app-builder' ); ?></p>
+										</td>
+									</tr>
+									<tr>
+										<th scope="row"><label for="bg360_ios_export_method"><?php esc_html_e( 'Signing / Export Method', 'bizgrowth360-app-builder' ); ?></label></th>
+										<td>
+											<select id="bg360_ios_export_method" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[ios_export_method]">
+												<option value="app-store" <?php selected( $options['ios_export_method'], 'app-store' ); ?>><?php esc_html_e( 'App Store / TestFlight Distribution', 'bizgrowth360-app-builder' ); ?></option>
+												<option value="ad-hoc" <?php selected( $options['ios_export_method'], 'ad-hoc' ); ?>><?php esc_html_e( 'Ad Hoc (Registered Devices)', 'bizgrowth360-app-builder' ); ?></option>
+												<option value="development" <?php selected( $options['ios_export_method'], 'development' ); ?>><?php esc_html_e( 'Development', 'bizgrowth360-app-builder' ); ?></option>
+											</select>
+										</td>
+									</tr>
+									<tr>
+										<th scope="row"><label for="bg360_ios_mode"><?php esc_html_e( 'Build Mode', 'bizgrowth360-app-builder' ); ?></label></th>
+										<td>
+											<select id="bg360_ios_mode" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[ios_mode]">
+												<option value="ipa" <?php selected( $options['ios_mode'], 'ipa' ); ?>><?php esc_html_e( 'Signed IPA Export (requires Apple signing secrets)', 'bizgrowth360-app-builder' ); ?></option>
+												<option value="validation" <?php selected( $options['ios_mode'], 'validation' ); ?>><?php esc_html_e( 'Simulator Validation (no IPA, no signing)', 'bizgrowth360-app-builder' ); ?></option>
+											</select>
+											<p class="description"><?php esc_html_e( 'Validation mode compiles the generated project for the iOS Simulator. It never reports that an IPA was produced.', 'bizgrowth360-app-builder' ); ?></p>
+										</td>
+									</tr>
+									<tr>
+										<th scope="row"><label for="bg360_macos_runner"><?php esc_html_e( 'macOS Runner', 'bizgrowth360-app-builder' ); ?></label></th>
+										<td>
+											<select id="bg360_macos_runner" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[macos_runner]">
+												<option value="macos-14" <?php selected( $options['macos_runner'], 'macos-14' ); ?>>macos-14 (recommended)</option>
+												<option value="macos-15" <?php selected( $options['macos_runner'], 'macos-15' ); ?>>macos-15</option>
+											</select>
+										</td>
+									</tr>
+									<tr>
+										<th scope="row"><?php esc_html_e( 'TestFlight Upload', 'bizgrowth360-app-builder' ); ?></th>
+										<td>
+											<label>
+												<input type="checkbox" id="bg360_ios_upload_testflight" name="<?php echo esc_attr( Settings::OPTION_KEY ); ?>[ios_upload_testflight]" value="1" <?php checked( $options['ios_upload_testflight'], true ); ?> />
+												<?php esc_html_e( 'Allow a TestFlight upload option for App Store builds', 'bizgrowth360-app-builder' ); ?>
+											</label>
+											<p class="description"><?php esc_html_e( 'Even when enabled, every build requires a separate confirmation checkbox. The plugin never submits an app for App Store review or release.', 'bizgrowth360-app-builder' ); ?></p>
+										</td>
+									</tr>
+								</table>
+							</div>
+
 							<div class="bizgrowth360-form-actions">
 								<?php submit_button( __( 'Save App Configuration', 'bizgrowth360-app-builder' ), 'secondary', 'submit', false ); ?>
-								<button type="button" class="button button-primary bg360-btn-large bg360-open-confirm-btn" data-build-target="both">
+								<button type="button" class="button button-primary bg360-btn-large bg360-open-confirm-btn" data-build-action="auto">
 									<span class="dashicons dashicons-controls-play"></span> <?php esc_html_e( 'Save & Start Build', 'bizgrowth360-app-builder' ); ?>
 								</button>
 							</div>
@@ -626,19 +724,19 @@ class AdminPage {
 						</div>
 						<div class="bg360-stage" id="stage-setup">
 							<span class="bg360-stage-dot"></span>
-							<span class="bg360-stage-label"><?php esc_html_e( 'SDK & Dependencies', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-stage-label"><?php esc_html_e( 'Toolchain & Dependencies', 'bizgrowth360-app-builder' ); ?></span>
 						</div>
 						<div class="bg360-stage" id="stage-compile">
 							<span class="bg360-stage-dot"></span>
-							<span class="bg360-stage-label"><?php esc_html_e( 'Gradle Compilation', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-stage-label"><?php esc_html_e( 'Compile / Archive', 'bizgrowth360-app-builder' ); ?></span>
 						</div>
 						<div class="bg360-stage" id="stage-signing">
 							<span class="bg360-stage-dot"></span>
-							<span class="bg360-stage-label"><?php esc_html_e( 'Signing & Keystore', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-stage-label"><?php esc_html_e( 'Code Signing', 'bizgrowth360-app-builder' ); ?></span>
 						</div>
 						<div class="bg360-stage" id="stage-artifacts">
 							<span class="bg360-stage-dot"></span>
-							<span class="bg360-stage-label"><?php esc_html_e( 'Packages Ready', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-stage-label"><?php esc_html_e( 'Export & Package', 'bizgrowth360-app-builder' ); ?></span>
 						</div>
 					</div>
 
@@ -648,7 +746,7 @@ class AdminPage {
 							<strong id="bg360-meta-run-id">-</strong>
 						</div>
 						<div class="bg360-meta-item">
-							<span class="bg360-meta-label"><?php esc_html_e( 'Target & Variant:', 'bizgrowth360-app-builder' ); ?></span>
+							<span class="bg360-meta-label"><?php esc_html_e( 'Platform & Target:', 'bizgrowth360-app-builder' ); ?></span>
 							<strong id="bg360-meta-event">-</strong>
 						</div>
 						<div class="bg360-meta-item">
@@ -663,7 +761,7 @@ class AdminPage {
 
 					<!-- Downloads Container -->
 					<div class="bg360-downloads-zone" id="bg360-downloads-zone" style="display: none;">
-						<h4><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Generated Android Packages Ready for Download:', 'bizgrowth360-app-builder' ); ?></h4>
+						<h4><span class="dashicons dashicons-yes-alt"></span> <?php esc_html_e( 'Generated Packages Ready for Download:', 'bizgrowth360-app-builder' ); ?></h4>
 						<div class="bg360-artifact-cards" id="bg360-artifact-cards">
 							<!-- Dynamic artifact cards injected via JS -->
 						</div>
@@ -686,11 +784,17 @@ class AdminPage {
 								<option value="failed"><?php esc_html_e( 'Failed', 'bizgrowth360-app-builder' ); ?></option>
 								<option value="cancelled"><?php esc_html_e( 'Cancelled', 'bizgrowth360-app-builder' ); ?></option>
 							</select>
+							<select id="bg360-filter-platform">
+								<option value="all"><?php esc_html_e( 'All Platforms', 'bizgrowth360-app-builder' ); ?></option>
+								<option value="android"><?php esc_html_e( 'Android', 'bizgrowth360-app-builder' ); ?></option>
+								<option value="ios"><?php esc_html_e( 'iOS', 'bizgrowth360-app-builder' ); ?></option>
+							</select>
 							<select id="bg360-filter-target">
 								<option value="all"><?php esc_html_e( 'All Targets', 'bizgrowth360-app-builder' ); ?></option>
 								<option value="both"><?php esc_html_e( 'Both (APK + AAB)', 'bizgrowth360-app-builder' ); ?></option>
 								<option value="apk"><?php esc_html_e( 'APK Only', 'bizgrowth360-app-builder' ); ?></option>
 								<option value="aab"><?php esc_html_e( 'AAB Only', 'bizgrowth360-app-builder' ); ?></option>
+								<option value="ipa"><?php esc_html_e( 'iOS IPA', 'bizgrowth360-app-builder' ); ?></option>
 							</select>
 							<button type="button" id="bg360-refresh-history-btn" class="button button-secondary">
 								<span class="dashicons dashicons-image-rotate"></span> <?php esc_html_e( 'Refresh', 'bizgrowth360-app-builder' ); ?>
@@ -704,6 +808,7 @@ class AdminPage {
 								<tr>
 									<th style="width:130px;"><?php esc_html_e( 'Build ID', 'bizgrowth360-app-builder' ); ?></th>
 									<th><?php esc_html_e( 'App Name & Version', 'bizgrowth360-app-builder' ); ?></th>
+									<th style="width:90px;"><?php esc_html_e( 'Platform', 'bizgrowth360-app-builder' ); ?></th>
 									<th style="width:110px;"><?php esc_html_e( 'Target', 'bizgrowth360-app-builder' ); ?></th>
 									<th style="width:110px;"><?php esc_html_e( 'Status', 'bizgrowth360-app-builder' ); ?></th>
 									<th style="width:90px;"><?php esc_html_e( 'Duration', 'bizgrowth360-app-builder' ); ?></th>
@@ -713,7 +818,7 @@ class AdminPage {
 							</thead>
 							<tbody id="bg360-history-body">
 								<tr>
-									<td colspan="7" class="text-center"><?php esc_html_e( 'Loading build history...', 'bizgrowth360-app-builder' ); ?></td>
+									<td colspan="8" class="text-center"><?php esc_html_e( 'Loading build history...', 'bizgrowth360-app-builder' ); ?></td>
 								</tr>
 							</tbody>
 						</table>
@@ -739,11 +844,11 @@ class AdminPage {
 			<div id="bg360-confirm-modal" class="bg360-modal-overlay" style="display:none;">
 				<div class="bg360-modal-box">
 					<div class="bg360-modal-header">
-						<h3><span class="dashicons dashicons-smartphone"></span> <?php esc_html_e( 'Confirm Android Build Request', 'bizgrowth360-app-builder' ); ?></h3>
+						<h3><span class="dashicons dashicons-smartphone"></span> <?php esc_html_e( 'Confirm Build Request', 'bizgrowth360-app-builder' ); ?></h3>
 						<button type="button" class="bg360-modal-close" data-close="#bg360-confirm-modal">&times;</button>
 					</div>
 					<div class="bg360-modal-body">
-						<p><?php esc_html_e( 'Please verify your app configuration snapshot before dispatching the build to the cloud compiler. An immutable snapshot of this configuration will be stored for this build.', 'bizgrowth360-app-builder' ); ?></p>
+						<p><?php esc_html_e( 'Please verify your app configuration snapshot before dispatching the build to the cloud compilers. An immutable snapshot of this configuration will be stored for this build.', 'bizgrowth360-app-builder' ); ?></p>
 						<table class="widefat striped bg360-summary-table">
 							<tbody>
 								<tr>
@@ -751,8 +856,16 @@ class AdminPage {
 									<td id="modal-summary-app-name"><strong>-</strong></td>
 								</tr>
 								<tr>
-									<th><?php esc_html_e( 'Package ID:', 'bizgrowth360-app-builder' ); ?></th>
+									<th><?php esc_html_e( 'Platform:', 'bizgrowth360-app-builder' ); ?></th>
+									<td id="modal-summary-platform"><strong>-</strong></td>
+								</tr>
+								<tr>
+									<th><?php esc_html_e( 'Android Package ID:', 'bizgrowth360-app-builder' ); ?></th>
 									<td id="modal-summary-package-id"><code>-</code></td>
+								</tr>
+								<tr id="modal-summary-ios-bundle-row">
+									<th><?php esc_html_e( 'iOS Bundle ID:', 'bizgrowth360-app-builder' ); ?></th>
+									<td id="modal-summary-ios-bundle"><code>-</code></td>
 								</tr>
 								<tr>
 									<th><?php esc_html_e( 'Website URL:', 'bizgrowth360-app-builder' ); ?></th>
@@ -763,7 +876,7 @@ class AdminPage {
 									<td id="modal-summary-version">-</td>
 								</tr>
 								<tr>
-									<th><?php esc_html_e( 'Build Target:', 'bizgrowth360-app-builder' ); ?></th>
+									<th><?php esc_html_e( 'Build Action:', 'bizgrowth360-app-builder' ); ?></th>
 									<td id="modal-summary-target"><strong>-</strong></td>
 								</tr>
 								<tr>
@@ -785,8 +898,21 @@ class AdminPage {
 									<th><?php esc_html_e( 'Custom Icon:', 'bizgrowth360-app-builder' ); ?></th>
 									<td id="modal-summary-icon">-</td>
 								</tr>
+								<tr id="modal-summary-testflight-row">
+									<th><?php esc_html_e( 'TestFlight:', 'bizgrowth360-app-builder' ); ?></th>
+									<td>
+										<label>
+											<input type="checkbox" id="bg360-confirm-testflight" value="1" />
+											<?php esc_html_e( 'Upload this signed IPA to TestFlight after the build (requires App Store export method and App Store Connect secrets).', 'bizgrowth360-app-builder' ); ?>
+										</label>
+										<p class="description" style="margin-top:4px;"><?php esc_html_e( 'This does not submit the app for App Store review or release. You must confirm TestFlight upload for every build.', 'bizgrowth360-app-builder' ); ?></p>
+									</td>
+								</tr>
 							</tbody>
 						</table>
+						<div class="notice notice-warning inline bg360-modal-ios-warning" id="modal-summary-ios-warning" style="display:none; margin-top:10px;">
+							<p><?php esc_html_e( 'iOS builds run on macOS GitHub runners and may incur GitHub Actions macOS usage costs.', 'bizgrowth360-app-builder' ); ?></p>
+						</div>
 						<div id="modal-summary-error-wrap" class="notice notice-error inline" style="display:none; margin-top:10px;">
 							<p id="modal-summary-error-text"></p>
 						</div>
@@ -1088,9 +1214,13 @@ class AdminPage {
 									<span class="dashicons dashicons-media-code"></span> <?php esc_html_e( 'Preview assetlinks.json', 'bizgrowth360-app-builder' ); ?>
 								</button>
 								<a href="<?php echo esc_url( home_url( '/.well-known/assetlinks.json' ) ); ?>" target="_blank" class="button button-link">
-									<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'View Live /.well-known/assetlinks.json', 'bizgrowth360-app-builder' ); ?>
+									<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'Android Asset Links', 'bizgrowth360-app-builder' ); ?>
+								</a>
+								<a href="<?php echo esc_url( home_url( '/.well-known/apple-app-site-association' ) ); ?>" target="_blank" class="button button-link">
+									<span class="dashicons dashicons-external"></span> <?php esc_html_e( 'iOS Apple App Site Association', 'bizgrowth360-app-builder' ); ?>
 								</a>
 							</div>
+							<p class="description"><?php esc_html_e( 'iOS Universal Links additionally require an Associated Domains entitlement in the signed build. The generated Info.plist and entitlements are configured automatically from these settings; the provisioning profile must include the Associated Domains capability.', 'bizgrowth360-app-builder' ); ?></p>
 						</div>
 					</div>
 
@@ -1275,6 +1405,11 @@ class AdminPage {
 							<div class="bg360-form-row">
 								<label for="feat_update_apk_url"><?php esc_html_e( 'Direct APK Download URL', 'bizgrowth360-app-builder' ); ?></label>
 								<input type="url" id="feat_update_apk_url" name="app_updates[direct_apk_url]" value="<?php echo esc_attr( $features['app_updates']['direct_apk_url'] ); ?>" class="large-text" placeholder="https://example.com/downloads/app.apk" />
+							</div>
+							<div class="bg360-form-row">
+								<label for="feat_update_app_store_url"><?php esc_html_e( 'Apple App Store URL (iOS)', 'bizgrowth360-app-builder' ); ?></label>
+								<input type="url" id="feat_update_app_store_url" name="app_updates[app_store_url]" value="<?php echo esc_attr( $features['app_updates']['app_store_url'] ?? '' ); ?>" class="large-text" placeholder="https://apps.apple.com/app/id..." />
+								<p class="description"><?php esc_html_e( 'Used by the iOS in-app update prompt to open the App Store. Android devices continue to use the Play Store or direct APK URL.', 'bizgrowth360-app-builder' ); ?></p>
 							</div>
 							<div class="bg360-card-actions">
 								<a href="<?php echo esc_url( home_url( '/wp-json/bizgrowth360/v1/app-update' ) ); ?>" target="_blank" class="button button-secondary">

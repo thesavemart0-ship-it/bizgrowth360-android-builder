@@ -71,6 +71,7 @@ class NativeFeatures {
 				'changelog'           => __( 'Performance improvements and bug fixes.', 'bizgrowth360-app-builder' ),
 				'play_store_url'      => '',
 				'direct_apk_url'      => '',
+				'app_store_url'       => '',
 			),
 		);
 	}
@@ -169,6 +170,7 @@ class NativeFeatures {
 			'changelog'           => sanitize_textarea_field( $input['app_updates']['changelog'] ?? '' ),
 			'play_store_url'      => esc_url_raw( $input['app_updates']['play_store_url'] ?? '' ),
 			'direct_apk_url'      => esc_url_raw( $input['app_updates']['direct_apk_url'] ?? '' ),
+			'app_store_url'       => esc_url_raw( $input['app_updates']['app_store_url'] ?? '' ),
 		);
 
 		update_option( self::OPTION_KEY, $clean );
@@ -213,7 +215,7 @@ class NativeFeatures {
 				return 'configured';
 
 			case 'app_updates':
-				if ( empty( $feat['play_store_url'] ) && empty( $feat['direct_apk_url'] ) ) {
+				if ( empty( $feat['play_store_url'] ) && empty( $feat['direct_apk_url'] ) && empty( $feat['app_store_url'] ) ) {
 					return 'needs_setup';
 				}
 				return 'configured';
@@ -317,6 +319,50 @@ class NativeFeatures {
 					'namespace'                => 'android_app',
 					'package_name'             => $package_id,
 					'sha256_cert_fingerprints' => $fingerprints,
+				),
+			),
+		);
+	}
+
+	/**
+	 * Generate Apple App Site Association JSON for iOS Universal Links.
+	 *
+	 * Served from /.well-known/apple-app-site-association. Apple requires the
+	 * Team ID prefix in appID, so the Apple Team ID must be configured for
+	 * Universal Links to verify.
+	 *
+	 * @return array
+	 */
+	public static function generate_aasa_json() {
+		$features = self::get_features();
+		$settings = new Settings();
+		$options  = $settings->get_options();
+
+		$bundle_id = (string) ( $options['ios_bundle_id'] ?? '' );
+		$team_id   = strtoupper( (string) ( $options['ios_team_id'] ?? '' ) );
+		$enabled   = ! empty( $features['deep_linking']['enabled'] );
+
+		if ( ! $enabled || empty( $bundle_id ) ) {
+			return array(
+				'applinks' => array(
+					'apps'    => array(),
+					'details' => array(),
+				),
+			);
+		}
+
+		$app_id = ! empty( $team_id ) ? $team_id . '.' . $bundle_id : $bundle_id;
+
+		return array(
+			'applinks' => array(
+				'apps'    => array(),
+				'details' => array(
+					array(
+						'appID'      => $app_id,
+						'components' => array(
+							array( '/' => '*' ),
+						),
+					),
 				),
 			),
 		);

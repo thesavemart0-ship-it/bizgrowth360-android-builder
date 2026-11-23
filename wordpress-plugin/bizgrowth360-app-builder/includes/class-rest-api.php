@@ -25,6 +25,7 @@ class RestApi {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 		add_action( 'init', array( $this, 'register_well_known_rewrite' ) );
 		add_action( 'template_redirect', array( $this, 'handle_well_known_assetlinks' ) );
+		add_action( 'template_redirect', array( $this, 'handle_well_known_aasa' ) );
 		add_filter( 'redirect_canonical', array( $this, 'filter_canonical_redirect' ), 10, 2 );
 	}
 
@@ -37,7 +38,7 @@ class RestApi {
 	 * @return string|false
 	 */
 	public function filter_canonical_redirect( $redirect_url, $requested_url ) {
-		if ( false !== strpos( $requested_url, '.well-known/assetlinks.json' ) ) {
+		if ( false !== strpos( $requested_url, '.well-known/assetlinks.json' ) || false !== strpos( $requested_url, '.well-known/apple-app-site-association' ) ) {
 			return false;
 		}
 		return $redirect_url;
@@ -80,6 +81,17 @@ class RestApi {
 			)
 		);
 
+		// Apple App Site Association endpoint (iOS Universal Links)
+		register_rest_route(
+			self::NAMESPACE,
+			'/apple-app-site-association',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'handle_aasa_rest' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
 		// Send push notification (Admin only)
 		register_rest_route(
 			self::NAMESPACE,
@@ -112,6 +124,7 @@ class RestApi {
 
 		$device_id = sanitize_text_field( $params['device_id'] ?? '' );
 		$token     = sanitize_text_field( $params['token'] ?? '' );
+		$platform  = sanitize_key( $params['platform'] ?? 'android' );
 
 		if ( empty( $device_id ) || empty( $token ) ) {
 			return new \WP_REST_Response(
@@ -123,11 +136,21 @@ class RestApi {
 			);
 		}
 
+		if ( ! in_array( $platform, array( 'android', 'ios' ), true ) ) {
+			return new \WP_REST_Response(
+				array(
+					'success' => false,
+					'message' => __( 'platform must be either "android" or "ios".', 'bizgrowth360-app-builder' ),
+				),
+				400
+			);
+		}
+
 		$registered = DeviceTokensDb::register_token(
 			array(
 				'device_id'   => $device_id,
 				'token'       => $token,
-				'platform'    => sanitize_key( $params['platform'] ?? 'android' ),
+				'platform'    => $platform,
 				'app_version' => sanitize_text_field( $params['app_version'] ?? '1.0.0' ),
 				'package_id'  => sanitize_text_field( $params['package_id'] ?? '' ),
 				'user_id'     => get_current_user_id() ?: null,
@@ -163,6 +186,10 @@ class RestApi {
 		$features     = NativeFeatures::get_features();
 		$update_conf  = $features['app_updates'] ?? array();
 		$current_code = absint( $request->get_param( 'version_code' ) ?? 1 );
+		$platform     = sanitize_key( $request->get_param( 'platform' ) ?? 'android' );
+		if ( ! in_array( $platform, array( 'android', 'ios' ), true ) ) {
+			$platform = 'android';
+		}
 
 		if ( empty( $update_conf['enabled'] ) ) {
 			return new \WP_REST_Response(
@@ -191,6 +218,8 @@ class RestApi {
 				'changelog'           => $update_conf['changelog'] ?? '',
 				'play_store_url'      => $update_conf['play_store_url'] ?? '',
 				'direct_apk_url'      => $update_conf['direct_apk_url'] ?? '',
+				'app_store_url'       => $update_conf['app_store_url'] ?? '',
+				'platform'            => $platform,
 			),
 			200
 		);
@@ -207,14 +236,27 @@ class RestApi {
 	}
 
 	/**
-	 * Register rewrite for /.well-known/assetlinks.json
+	 * Apple App Site Association REST callback.
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function handle_aasa_rest() {
+		$json = NativeFeatures::generate_aasa_json();
+		return new \WP_REST_Response( $json, 200 );
+	}
+
+	/**
+	 * Register rewrite for /.well-known/assetlinks.json and
+	 * /.well-known/apple-app-site-association.
 	 */
 	public function register_well_known_rewrite() {
 		add_rewrite_rule( '^\.well-known/assetlinks\.json$', 'index.php?bg360_assetlinks=1', 'top' );
+		add_rewrite_rule( '^\.well-known/apple-app-site-association$', 'index.php?bg360_aasa=1', 'top' );
 		add_filter(
 			'query_vars',
 			function ( $vars ) {
 				$vars[] = 'bg360_assetlinks';
+				$vars[] = 'bg360_aasa';
 				return $vars;
 			}
 		);
@@ -238,6 +280,31 @@ class RestApi {
 			header( 'Content-Type: application/json; charset=utf-8' );
 			header( 'X-Content-Type-Options: nosniff' );
 			echo wp_json_encode( NativeFeatures::generate_assetlinks_json(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+			exit;
+		}
+	}
+
+	/**
+	 * Serve /.well-known/apple-app-site-association with proper headers.
+	 *
+	 * Apple requires this file to be served as application/json without a
+	 * .json extension and without redirects.
+	 */
+	public function handle_well_known_aasa() {
+		global $wp_query;
+
+		$is_aasa = false;
+		if ( isset( $wp_query->query_vars['bg360_aasa'] ) ) {
+			$is_aasa = true;
+		} elseif ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( $_SERVER['REQUEST_URI'], '.well-known/apple-app-site-association' ) ) {
+			$is_aasa = true;
+		}
+
+		if ( $is_aasa ) {
+			status_header( 200 );
+			header( 'Content-Type: application/json; charset=utf-8' );
+			header( 'X-Content-Type-Options: nosniff' );
+			echo wp_json_encode( NativeFeatures::generate_aasa_json(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
 			exit;
 		}
 	}
@@ -280,10 +347,16 @@ class RestApi {
 			);
 		}
 
-		// Gather tokens
+		// Gather tokens. FCM legacy HTTP only accepts Android FCM registration
+		// tokens; iOS APNs tokens must be delivered through an APNs provider.
 		$tokens = array();
 		if ( 'broadcast' === $target ) {
-			$device_rows = DeviceTokensDb::get_tokens( array( 'limit' => 500 ) );
+			$device_rows = DeviceTokensDb::get_tokens(
+				array(
+					'platform' => 'android',
+					'limit'    => 500,
+				)
+			);
 			foreach ( $device_rows as $row ) {
 				$tokens[] = $row->token;
 			}
@@ -295,7 +368,7 @@ class RestApi {
 			return new \WP_REST_Response(
 				array(
 					'success' => false,
-					'message' => __( 'No registered devices found to receive push notification.', 'bizgrowth360-app-builder' ),
+					'message' => __( 'No registered Android FCM devices found. iOS APNs tokens require a separate APNs push provider and cannot be sent through FCM legacy.', 'bizgrowth360-app-builder' ),
 				),
 				400
 			);

@@ -20,6 +20,30 @@ class GitHubClient {
 	}
 
 	/**
+	 * Normalize booleans that arrive from HTML forms, CLI flags or JSON.
+	 *
+	 * @param mixed $value
+	 * @param bool  $default
+	 * @return bool
+	 */
+	private function to_bool( $value, $default = true ) {
+		if ( is_bool( $value ) ) {
+			return $value;
+		}
+		if ( is_int( $value ) || is_float( $value ) ) {
+			return 0 !== (int) $value;
+		}
+		$normalized = strtolower( trim( (string) $value ) );
+		if ( in_array( $normalized, array( '1', 'true', 'yes', 'on' ), true ) ) {
+			return true;
+		}
+		if ( in_array( $normalized, array( '0', 'false', 'no', 'off', '' ), true ) ) {
+			return false;
+		}
+		return $default;
+	}
+
+	/**
 	 * Get authorization headers for GitHub API.
 	 *
 	 * @return array
@@ -147,14 +171,15 @@ class GitHubClient {
 			'build_type'             => (string) $build_type,
 			'build_variant'          => (string) $build_variant,
 			'orientation'            => (string) $orientation,
-			'primary_color'          => (string) ( $options['primary_color'] ?? '#2563EB' ),
-			'background_color'       => (string) ( $options['background_color'] ?? '#FFFFFF' ),
-			'splash_background_color' => (string) ( $options['splash_background_color'] ?? '' ),
-			'icon_url'               => (string) ( $options['app_icon'] ?? '' ),
-			'splash_url'             => (string) ( $options['splash_image'] ?? '' ),
-			'allow_external_links'   => ! empty( $options['allow_external_links'] ) ? 'true' : 'false',
-			'enable_status_bar'      => 'true',
+			'primary_color'          => (string) ( $custom_inputs['primary_color'] ?? $options['primary_color'] ?? '#2563EB' ),
+			'background_color'       => (string) ( $custom_inputs['background_color'] ?? $options['background_color'] ?? '#FFFFFF' ),
+			'splash_background_color' => (string) ( $custom_inputs['splash_background_color'] ?? $options['splash_background_color'] ?? '' ),
+			'icon_url'               => (string) ( $custom_inputs['icon_url'] ?? $options['app_icon'] ?? '' ),
+			'splash_url'             => (string) ( $custom_inputs['splash_url'] ?? $options['splash_image'] ?? '' ),
+			'allow_external_links'   => $this->to_bool( $custom_inputs['allow_external_links'] ?? ( $options['allow_external_links'] ?? true ), true ) ? 'true' : 'false',
+			'enable_status_bar'      => $this->to_bool( $custom_inputs['enable_status_bar'] ?? ( $options['enable_status_bar'] ?? true ), true ) ? 'true' : 'false',
 			'design_json'            => (string) ( $custom_inputs['design_json'] ?? '' ),
+			'features_json'          => (string) ( $custom_inputs['features_json'] ?? '' ),
 			'config_file'            => 'config/default-app.json',
 		);
 
@@ -226,12 +251,123 @@ class GitHubClient {
 	}
 
 	/**
-	 * Retrieve latest workflow runs.
+	 * Dispatch an iOS workflow run via workflow_dispatch.
 	 *
-	 * @param int $limit
+	 * Only non-sensitive configuration is sent. Certificates, provisioning
+	 * profiles and App Store Connect keys remain GitHub Actions secrets.
+	 *
+	 * @param array $custom_inputs
 	 * @return array
 	 */
-	public function get_workflow_runs( $limit = 5 ) {
+	public function dispatch_ios_build( $custom_inputs = array() ) {
+		if ( ! Config::has_token() ) {
+			return array(
+				'success' => false,
+				'message' => __( 'The build service is not configured. Please define BIZGROWTH360_GITHUB_TOKEN in wp-config.php.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$owner         = Config::get_github_owner();
+		$repo          = Config::get_github_repo();
+		$branch        = Config::get_github_branch();
+		$workflow_file = Config::get_ios_workflow_file();
+
+		if ( ! preg_match( '/^[a-zA-Z0-9_\-\.]+$/', $owner ) || ! preg_match( '/^[a-zA-Z0-9_\-\.]+$/', $repo ) || ! preg_match( '/^[a-zA-Z0-9_\-\.]+$/', $workflow_file ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Invalid iOS build workflow configuration.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$options = $this->settings->get_options();
+
+		$inputs = array(
+			'app_name'                 => (string) ( $custom_inputs['app_name'] ?? $options['app_name'] ),
+			'package_id'               => (string) ( $custom_inputs['package_id'] ?? $options['package_id'] ),
+			'ios_bundle_id'            => (string) ( $custom_inputs['ios_bundle_id'] ?? $options['ios_bundle_id'] ),
+			'website_url'              => (string) ( $custom_inputs['website_url'] ?? $options['website_url'] ),
+			'version_name'             => (string) ( $custom_inputs['version_name'] ?? $options['version_name'] ),
+			'version_code'             => (string) ( $custom_inputs['version_code'] ?? $options['version_code'] ),
+			'ios_team_id'              => (string) ( $custom_inputs['ios_team_id'] ?? $options['ios_team_id'] ),
+			'ios_export_method'        => (string) ( $custom_inputs['ios_export_method'] ?? $options['ios_export_method'] ),
+			'ios_mode'                 => (string) ( $custom_inputs['ios_mode'] ?? $options['ios_mode'] ),
+			'upload_to_testflight'     => $this->to_bool( $custom_inputs['upload_to_testflight'] ?? false, false ) ? 'true' : 'false',
+			'confirm_app_store_upload' => $this->to_bool( $custom_inputs['confirm_app_store_upload'] ?? false, false ) ? 'true' : 'false',
+			'macos_runner'             => (string) ( $custom_inputs['macos_runner'] ?? $options['macos_runner'] ),
+			'orientation'              => (string) ( $custom_inputs['orientation'] ?? $options['orientation'] ),
+			'primary_color'            => (string) ( $custom_inputs['primary_color'] ?? $options['primary_color'] ),
+			'background_color'         => (string) ( $custom_inputs['background_color'] ?? $options['background_color'] ),
+			'splash_background_color'  => (string) ( $custom_inputs['splash_background_color'] ?? '' ),
+			'icon_url'                 => (string) ( $custom_inputs['icon_url'] ?? '' ),
+			'splash_url'               => (string) ( $custom_inputs['splash_url'] ?? '' ),
+			'allow_external_links'     => $this->to_bool( $custom_inputs['allow_external_links'] ?? ( $options['allow_external_links'] ?? true ), true ) ? 'true' : 'false',
+			'enable_status_bar'        => $this->to_bool( $custom_inputs['enable_status_bar'] ?? ( $options['enable_status_bar'] ?? true ), true ) ? 'true' : 'false',
+			'design_json'              => (string) ( $custom_inputs['design_json'] ?? '' ),
+			'features_json'            => (string) ( $custom_inputs['features_json'] ?? '' ),
+			'config_file'              => 'config/default-app.json',
+		);
+
+		$url      = Config::get_api_base() . "/repos/{$owner}/{$repo}/actions/workflows/{$workflow_file}/dispatches";
+		$response = wp_remote_post(
+			$url,
+			array(
+				'headers' => array_merge( $this->get_headers(), array( 'Content-Type' => 'application/json' ) ),
+				'body'    => wp_json_encode(
+					array(
+						'ref'    => $branch,
+						'inputs' => $inputs,
+					)
+				),
+				'timeout' => 20,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Network error while contacting the iOS build service.', 'bizgrowth360-app-builder' ),
+			);
+		}
+
+		$status = wp_remote_retrieve_response_code( $response );
+		if ( 204 === $status ) {
+			return array(
+				'success'   => true,
+				'message'   => __( 'iOS build request accepted. The macOS runner is preparing the IPA build.', 'bizgrowth360-app-builder' ),
+				'timestamp' => time(),
+				'contract'  => 'ios-phase7',
+				'inputs'    => $inputs,
+			);
+		}
+
+		$body_message = '';
+		$body         = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( is_array( $body ) && ! empty( $body['message'] ) ) {
+			$body_message = ' ' . sanitize_text_field( $body['message'] );
+		}
+
+		return array(
+			'success'  => false,
+			'status'   => $status,
+			'contract' => 'ios-phase7',
+			'inputs'   => $inputs,
+			'message'  => sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'Unable to dispatch the iOS build request (HTTP %d). Verify the ios-build.yml workflow and GitHub secrets.%s', 'bizgrowth360-app-builder' ),
+				$status,
+				$body_message
+			),
+		);
+	}
+
+	/**
+	 * Retrieve latest workflow runs.
+	 *
+	 * @param int    $limit
+	 * @param string $workflow_file Optional workflow file to filter by.
+	 * @return array
+	 */
+	public function get_workflow_runs( $limit = 5, $workflow_file = '' ) {
 		if ( ! Config::has_token() ) {
 			return array(
 				'success' => false,
@@ -242,7 +378,18 @@ class GitHubClient {
 		$owner = Config::get_github_owner();
 		$repo  = Config::get_github_repo();
 
-		$url      = Config::get_api_base() . "/repos/{$owner}/{$repo}/actions/runs?per_page={$limit}";
+		$runs_path = "/repos/{$owner}/{$repo}/actions/runs";
+		if ( ! empty( $workflow_file ) ) {
+			if ( ! preg_match( '/^[a-zA-Z0-9_\-\.]+$/', $workflow_file ) ) {
+				return array(
+					'success' => false,
+					'message' => __( 'Invalid build workflow identifier.', 'bizgrowth360-app-builder' ),
+				);
+			}
+			$runs_path = "/repos/{$owner}/{$repo}/actions/workflows/{$workflow_file}/runs";
+		}
+
+		$url      = Config::get_api_base() . $runs_path . '?per_page=' . absint( $limit );
 		$response = wp_remote_get(
 			$url,
 			array(
@@ -570,14 +717,16 @@ class GitHubClient {
 				$body = "... [log truncated for display] ...\n" . substr( $body, -500000 );
 			}
 
-			// Mask potential sensitive data (PAT tokens, passwords, keystores)
+			// Mask potential sensitive data (PAT tokens, Apple keys, passwords)
 			$body = preg_replace( '/ghp_[a-zA-Z0-9]{36}/', 'ghp_************************************', $body );
+			$body = preg_replace( '/-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----/s', '[REDACTED PRIVATE KEY]', $body );
+			$body = preg_replace( '/\b[A-Za-z0-9+\/]{200,}={0,2}\b/', '[REDACTED BASE64 BLOB]', $body );
 			$body = preg_replace( '/[a-zA-Z0-9_\-\.]+@[a-zA-Z0-9_\-\.]+\.[a-zA-Z]{2,}/', '***@***.***', $body );
 
 			return array(
 				'success'  => true,
 				'job_id'   => $job_id,
-				'job_name' => $job['name'] ?? 'build-android',
+				'job_name' => $job['name'] ?? 'build',
 				'logs'     => $body,
 			);
 		}

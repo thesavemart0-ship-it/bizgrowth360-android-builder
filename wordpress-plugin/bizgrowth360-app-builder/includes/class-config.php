@@ -23,6 +23,7 @@ class Config {
 	const GITHUB_REPO    = 'bizgrowth360-android-builder';
 	const GITHUB_BRANCH  = 'main';
 	const WORKFLOW_FILE  = 'android-build.yml';
+	const IOS_WORKFLOW_FILE = 'ios-build.yml';
 	const API_BASE       = 'https://api.github.com';
 	const TOKEN_CONSTANT = 'BIZGROWTH360_GITHUB_TOKEN';
 
@@ -60,6 +61,15 @@ class Config {
 	 */
 	public static function get_workflow_file() {
 		return self::WORKFLOW_FILE;
+	}
+
+	/**
+	 * Get the iOS workflow file name.
+	 *
+	 * @return string
+	 */
+	public static function get_ios_workflow_file() {
+		return self::IOS_WORKFLOW_FILE;
 	}
 
 	/**

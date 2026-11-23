@@ -13,7 +13,7 @@
 	var pollSeconds = 0;
 	var timerInterval = null;
 	var activeBuildId = null;
-	var pendingBuildTarget = 'both';
+	var pendingBuildAction = 'both';
 	var currentPage = 1;
 	var totalPages = 1;
 
@@ -26,6 +26,7 @@
 		initBuildButtons();
 		initBuildCenter();
 		initNativeFeatures();
+		initIOSSettings();
 
 		// Initial check on load
 		loadActiveBuildOrHistory();
@@ -181,6 +182,28 @@
 		});
 	}
 
+	function showToast(message, type) {
+		type = type || 'success';
+		var container = $('#bg360-toast-container');
+		if (!container.length) {
+			container = $('<div id="bg360-toast-container" class="bg360-toast-container"></div>');
+			$('body').append(container);
+		}
+		var icon = type === 'success' ? 'yes-alt' : (type === 'error' ? 'warning' : 'info');
+		var toast = $(
+			'<div class="bg360-toast bg360-toast-' + type + '">' +
+			'  <span class="dashicons dashicons-' + icon + '"></span>' +
+			'  <span class="bg360-toast-msg">' + escapeHtml(message) + '</span>' +
+			'</div>'
+		);
+		container.append(toast);
+		setTimeout(function () { toast.addClass('show'); }, 10);
+		setTimeout(function () {
+			toast.removeClass('show');
+			setTimeout(function () { toast.remove(); }, 400);
+		}, 4000);
+	}
+
 	/**
 	 * Build Buttons & Pre-Build Confirmation Modal
 	 */
@@ -194,28 +217,43 @@
 				return;
 			}
 
-			pendingBuildTarget = $(this).data('build-target') || 'both';
+			var requested = $(this).data('build-action') || $(this).data('build-target') || 'auto';
+			pendingBuildAction = resolveBuildAction(String(requested));
 
 			// Validate inputs before showing modal
 			var postData = collectFormData();
 			postData.action = 'bizgrowth360_validate_build';
-			postData.build_type = pendingBuildTarget;
+			postData.build_action = pendingBuildAction;
+			postData.platform = actionPlatform(pendingBuildAction);
 
 			$('#modal-summary-error-wrap').hide();
 
 			$.post(bizgrowth360AppBuilder.ajax_url, postData).done(function (res) {
 				if (res.success && res.data.valid) {
 					var s = res.data.summary;
+					var hasIOS = actionHasIOS(pendingBuildAction);
+					var canTestflight = hasIOS &&
+						bizgrowth360AppBuilder.ios_upload_testflight &&
+						bizgrowth360AppBuilder.ios_export_method === 'app-store' &&
+						bizgrowth360AppBuilder.ios_mode === 'ipa';
+
 					$('#modal-summary-app-name strong').text(s.app_name);
+					$('#modal-summary-platform strong').text(formatPlatform(pendingBuildAction));
 					$('#modal-summary-package-id code').text(s.package_id);
+					$('#modal-summary-ios-bundle code').text(s.ios_bundle_id || '-');
+					$('#modal-summary-ios-bundle-row').toggle(hasIOS);
 					$('#modal-summary-url-link').attr('href', s.website_url).text(s.website_url);
 					$('#modal-summary-version').text(s.version_name + ' (Build: ' + s.version_code + ')');
-					$('#modal-summary-target strong').text(formatBuildTarget(pendingBuildTarget));
-					$('#modal-summary-variant').text(s.build_variant.toUpperCase());
+					$('#modal-summary-target strong').text(formatBuildAction(pendingBuildAction));
+					$('#modal-summary-variant').text((s.build_variant || 'release').toUpperCase());
 					$('#modal-summary-orientation').text(s.orientation);
 					$('#modal-summary-color-box').css('background-color', s.primary_color);
 					$('#modal-summary-color').text(s.primary_color);
 					$('#modal-summary-icon').text(s.icon_url ? 'Custom Icon Provided' : 'Default Auto-Generated Vector');
+
+					$('#modal-summary-testflight-row').toggle(canTestflight);
+					$('#bg360-confirm-testflight').prop('checked', false);
+					$('#modal-summary-ios-warning').toggle(hasIOS);
 
 					$('#bg360-confirm-modal').fadeIn(150);
 				} else {
@@ -230,8 +268,10 @@
 		// Confirm & Start Dispatch
 		$('#bg360-confirm-start-btn').on('click', function (e) {
 			e.preventDefault();
+			var testflight = actionHasIOS(pendingBuildAction) && $('#bg360-confirm-testflight').is(':checked');
 			$('#bg360-confirm-modal').fadeOut(150);
-			startBuild(pendingBuildTarget);
+			startBuild(pendingBuildAction, testflight);
+			$('#bg360-confirm-testflight').prop('checked', false);
 		});
 
 		// Cancel Active Build
@@ -262,6 +302,24 @@
 		});
 	}
 
+	function resolveBuildAction(requested) {
+		if (requested && requested !== 'auto') return requested;
+		var platform = $('#bg360_platform').val() || 'android';
+		if (platform === 'ios') return 'ios';
+		if (platform === 'both') return 'all';
+		return $('#bg360_build_target').val() || 'both';
+	}
+
+	function actionPlatform(action) {
+		if (action === 'ios') return 'ios';
+		if (action === 'all') return 'both';
+		return 'android';
+	}
+
+	function actionHasIOS(action) {
+		return action === 'ios' || action === 'all';
+	}
+
 	function collectFormData() {
 		return {
 			nonce: bizgrowth360AppBuilder.nonce,
@@ -270,9 +328,11 @@
 			website_url: $('#bg360_website_url').val(),
 			version_name: $('#bg360_version_name').val(),
 			version_code: $('#bg360_version_code').val(),
+			platform: $('#bg360_platform').val(),
 			build_target: $('#bg360_build_target').val(),
-			build_type: pendingBuildTarget || $('#bg360_build_target').val(),
+			build_type: $('#bg360_build_type').val(),
 			build_variant: $('#bg360_build_type').val(),
+			build_action: pendingBuildAction,
 			orientation: $('#bg360_orientation').val(),
 			primary_color: $('#bg360_primary_color').val(),
 			background_color: $('#bg360_background_color').val(),
@@ -280,20 +340,47 @@
 			navigation_bar_color: $('#bg360_navigation_bar_color').val(),
 			icon_url: $('#bg360_app_icon').val(),
 			splash_url: $('#bg360_splash_image').val(),
-			allow_external_links: $('#bg360_allow_external_links').is(':checked') ? 1 : 0
+			allow_external_links: $('#bg360_allow_external_links').is(':checked') ? 1 : 0,
+			ios_bundle_id: $('#bg360_ios_bundle_id').val(),
+			ios_team_id: $('#bg360_ios_team_id').val(),
+			ios_export_method: $('#bg360_ios_export_method').val(),
+			ios_mode: $('#bg360_ios_mode').val(),
+			macos_runner: $('#bg360_macos_runner').val(),
+			ios_upload_testflight: $('#bg360_ios_upload_testflight').is(':checked') ? 1 : 0
 		};
 	}
 
-	function formatBuildTarget(target) {
-		if (target === 'apk') return 'APK Only (Direct Install)';
-		if (target === 'aab') return 'AAB Only (Play Store)';
-		return 'Both APK & AAB Packages';
+	function formatBuildAction(action) {
+		if (action === 'apk') return 'Android APK (Direct Install)';
+		if (action === 'aab') return 'Android AAB (Play Store)';
+		if (action === 'ios') return 'iOS IPA (Apple)';
+		if (action === 'all') return 'Android APK + AAB and iOS IPA';
+		return 'Android APK & AAB Packages';
+	}
+
+	function formatPlatform(action) {
+		if (action === 'ios') return 'iOS (macOS runner)';
+		if (action === 'all') return 'Android + iOS';
+		return 'Android';
+	}
+
+	function initIOSSettings() {
+		function sync() {
+			var platform = $('#bg360_platform').val();
+			$('#bg360-ios-settings').toggle(platform === 'ios' || platform === 'both');
+			$('#modal-summary-ios-warning').toggle(platform === 'ios' || platform === 'both');
+		}
+		$('#bg360_platform').on('change', sync);
+		sync();
 	}
 
 	/**
 	 * Trigger Build
+	 *
+	 * @param {string} action apk|aab|both|ios|all
+	 * @param {boolean} testflight Explicit per-build TestFlight approval
 	 */
-	function startBuild(target) {
+	function startBuild(action, testflight) {
 		switchTab('tab-monitor');
 
 		updateBuildStatus('dispatching', 'Dispatching Build');
@@ -324,20 +411,31 @@
 
 			var postData = collectFormData();
 			postData.action = 'bizgrowth360_start_build';
-			postData.build_type = target;
+			postData.build_action = action;
+			postData.platform = actionPlatform(action);
+			postData.confirm_app_store_upload = testflight && actionHasIOS(action) ? 1 : 0;
+			postData.ios_upload_testflight = testflight && actionHasIOS(action) ? 1 : 0;
 
 			$.post(bizgrowth360AppBuilder.ajax_url, postData).done(function (res) {
 				if (res.success) {
 					activeBuildId = res.data.build_id;
 					$('#bg360-meta-run-id').text(activeBuildId);
-					$('#bg360-meta-event').text(target.toUpperCase());
-					showNotice(res.data.message, 'success');
+					$('#bg360-meta-event').text(formatPlatform(action) + ' / ' + formatBuildAction(action));
+
+					if (res.data.builds && res.data.builds.length > 1) {
+						var ids = res.data.builds.map(function (b) { return b.build_id + ' (' + b.platform + ')'; }).join(', ');
+						showNotice(res.data.message + ' Build records: ' + ids, res.data.partial ? 'warning' : 'success');
+					} else {
+						showNotice(res.data.message, res.data.partial ? 'warning' : 'success');
+					}
 					setTimeout(startPolling, 3000);
+					loadHistory(1);
 				} else {
 					stopTimer();
 					updateBuildStatus('failed', 'Dispatch Failed');
 					$('#bg360-cancel-build-btn').hide();
 					showNotice(res.data.message || 'Build trigger failed.', 'error');
+					loadHistory(1);
 				}
 			}).fail(function () {
 				stopTimer();
@@ -379,7 +477,7 @@
 
 		var badgeClass = 'bg360-badge-idle';
 		if (status === 'queued' || status === 'dispatching') badgeClass = 'bg360-badge-queued';
-		else if (status === 'in_progress' || status === 'starting' || status === 'preparing' || status === 'building' || status === 'signing') badgeClass = 'bg360-badge-progress';
+		else if (status === 'in_progress' || status === 'starting' || status === 'preparing' || status === 'building' || status === 'signing' || status === 'exporting' || status === 'uploading') badgeClass = 'bg360-badge-progress';
 		else if (status === 'completed' || status === 'success') badgeClass = 'bg360-badge-success';
 		else if (status === 'failed' || status === 'cancelled') badgeClass = 'bg360-badge-failure';
 
@@ -412,9 +510,10 @@
 
 			var b = res.data.build;
 			activeBuildId = b.build_id;
+			var isIOS = b.platform === 'ios';
 
 			$('#bg360-meta-run-id').text(b.run_number ? '#' + b.run_number + ' (' + b.build_id + ')' : b.build_id);
-			$('#bg360-meta-event').text(b.build_type ? b.build_type.toUpperCase() + ' (' + (b.build_variant || 'release') + ')' : 'BOTH');
+			$('#bg360-meta-event').text((isIOS ? 'iOS' : 'Android') + ' / ' + (b.build_type ? b.build_type.toUpperCase() : 'BOTH') + ' (' + (b.build_variant || 'release') + ')');
 			$('#bg360-meta-status-text').text(b.status.toUpperCase());
 
 			// Granular stages
@@ -424,26 +523,44 @@
 				resetStages();
 				$('#stage-init').addClass('active');
 				$('#bg360-cancel-build-btn').show();
-			} else if (b.status === 'preparing' || b.stage === 'setup') {
-				updateBuildStatus('in_progress', 'Preparing SDK & Tools');
+			} else if (b.status === 'preparing' || b.stage === 'setup' || b.stage === 'preparing') {
+				updateBuildStatus('in_progress', isIOS ? 'Preparing Xcode & CocoaPods' : 'Preparing SDK & Tools');
 				$('#bg360-progress-bar').css('width', '40%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('active');
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'building' || b.stage === 'building') {
-				updateBuildStatus('in_progress', 'Gradle Compiling');
+				updateBuildStatus('in_progress', isIOS ? 'Xcode Compile / Archive' : 'Gradle Compiling');
 				$('#bg360-progress-bar').css('width', '65%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('completed');
 				$('#stage-compile').addClass('active');
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'signing' || b.stage === 'signing') {
-				updateBuildStatus('in_progress', 'Keystore Signing');
-				$('#bg360-progress-bar').css('width', '85%');
+				updateBuildStatus('in_progress', isIOS ? 'Apple Code Signing' : 'Keystore Signing');
+				$('#bg360-progress-bar').css('width', '82%');
 				$('#stage-init').addClass('completed');
 				$('#stage-setup').addClass('completed');
 				$('#stage-compile').addClass('completed');
 				$('#stage-signing').addClass('active');
+				$('#bg360-cancel-build-btn').show();
+			} else if (b.status === 'exporting' || b.stage === 'exporting') {
+				updateBuildStatus('in_progress', isIOS ? 'Exporting Signed IPA' : 'Packaging Artifacts');
+				$('#bg360-progress-bar').css('width', '92%');
+				$('#stage-init').addClass('completed');
+				$('#stage-setup').addClass('completed');
+				$('#stage-compile').addClass('completed');
+				$('#stage-signing').addClass('completed');
+				$('#stage-artifacts').addClass('active');
+				$('#bg360-cancel-build-btn').show();
+			} else if (b.status === 'uploading' || b.stage === 'uploading') {
+				updateBuildStatus('in_progress', 'Uploading to TestFlight');
+				$('#bg360-progress-bar').css('width', '96%');
+				$('#stage-init').addClass('completed');
+				$('#stage-setup').addClass('completed');
+				$('#stage-compile').addClass('completed');
+				$('#stage-signing').addClass('completed');
+				$('#stage-artifacts').addClass('active');
 				$('#bg360-cancel-build-btn').show();
 			} else if (b.status === 'completed') {
 				stopPolling();
@@ -479,15 +596,19 @@
 		}
 
 		artifacts.forEach(function (art) {
-			var isApk = art.name.toLowerCase().indexOf('apk') !== -1;
-			var isAab = art.name.toLowerCase().indexOf('aab') !== -1;
-			var typeClass = isApk ? 'apk' : (isAab ? 'aab' : 'zip');
-			var typeLabel = isApk ? 'APK' : (isAab ? 'AAB' : 'FILE');
+			var name = (art.name || '').toLowerCase();
+			var isApk = name.indexOf('apk') !== -1;
+			var isAab = name.indexOf('aab') !== -1;
+			var isIpa = name.indexOf('ipa') !== -1;
+			var typeClass = isApk ? 'apk' : (isAab ? 'aab' : (isIpa ? 'ipa' : 'zip'));
+			var typeLabel = isApk ? 'APK' : (isAab ? 'AAB' : (isIpa ? 'IPA' : 'FILE'));
+			var typeParam = isApk ? 'apk' : (isAab ? 'aab' : (isIpa ? 'ipa' : ''));
+			var detail = isApk ? 'Direct Android Install' : (isAab ? 'Google Play Console' : (isIpa ? 'TestFlight / App Store' : 'Build package'));
 
 			var downloadLink = bizgrowth360AppBuilder.download_base_url +
 				'&artifact_id=' + encodeURIComponent(art.id) +
 				'&build_id=' + encodeURIComponent(buildId || '') +
-				'&type=' + (isApk ? 'apk' : (isAab ? 'aab' : '')) +
+				'&type=' + typeParam +
 				'&_wpnonce=' + encodeURIComponent(bizgrowth360AppBuilder.download_nonce);
 
 			var card = $(
@@ -495,8 +616,8 @@
 				'  <div class="bg360-artifact-info">' +
 				'    <div class="bg360-artifact-icon ' + typeClass + '">' + typeLabel + '</div>' +
 				'    <div>' +
-				'      <h5 class="bg360-artifact-title">' + art.name + '</h5>' +
-				'      <p class="bg360-artifact-size">' + (art.size_mb || '') + ' • ' + (isApk ? 'Direct Android Install' : 'Google Play Console') + '</p>' +
+				'      <h5 class="bg360-artifact-title">' + escapeHtml(art.name) + '</h5>' +
+				'      <p class="bg360-artifact-size">' + (art.size_mb || '') + ' • ' + detail + '</p>' +
 				'    </div>' +
 				'  </div>' +
 				'  <a href="' + downloadLink + '" class="button button-primary bg360-download-btn">' +
@@ -522,7 +643,7 @@
 			loadHistory(1);
 		}, 400));
 
-		$('#bg360-filter-status, #bg360-filter-target').on('change', function () {
+		$('#bg360-filter-status, #bg360-filter-target, #bg360-filter-platform').on('change', function () {
 			loadHistory(1);
 		});
 
@@ -605,7 +726,7 @@
 	function loadHistory(page) {
 		currentPage = page || 1;
 		var tbody = $('#bg360-history-body');
-		tbody.html('<tr><td colspan="7" class="text-center"><span class="spinner is-active" style="float:none;"></span> Loading build history...</td></tr>');
+		tbody.html('<tr><td colspan="8" class="text-center"><span class="spinner is-active" style="float:none;"></span> Loading build history...</td></tr>');
 
 		$.post(bizgrowth360AppBuilder.ajax_url, {
 			action: 'bizgrowth360_get_builds',
@@ -613,11 +734,12 @@
 			search: $('#bg360-filter-search').val(),
 			status: $('#bg360-filter-status').val(),
 			build_type: $('#bg360-filter-target').val(),
+			platform: $('#bg360-filter-platform').val(),
 			page: currentPage,
 			per_page: 10
 		}).done(function (res) {
 			if (!res.success) {
-				tbody.html('<tr><td colspan="7" class="text-center text-error">Failed loading build records.</td></tr>');
+				tbody.html('<tr><td colspan="8" class="text-center text-error">Failed loading build records.</td></tr>');
 				return;
 			}
 
@@ -636,10 +758,10 @@
 				return;
 			}
 
-			tbody.html('<tr><td colspan="7" class="text-center">No build records found yet. Trigger your first build to see history.</td></tr>');
+			tbody.html('<tr><td colspan="8" class="text-center">No build records found yet. Trigger your first build to see history.</td></tr>');
 			$('#bg360-history-pagination').hide();
 		}).fail(function () {
-			tbody.html('<tr><td colspan="7" class="text-center text-error">Failed to communicate with build server.</td></tr>');
+			tbody.html('<tr><td colspan="8" class="text-center text-error">Failed to communicate with build server.</td></tr>');
 		});
 	}
 
@@ -664,15 +786,19 @@
 			// Downloads
 			if (b.status === 'completed' && b.artifacts && b.artifacts.length > 0) {
 				b.artifacts.forEach(function (art) {
-					var isApk = art.name.toLowerCase().indexOf('apk') !== -1;
-					var isAab = art.name.toLowerCase().indexOf('aab') !== -1;
-					if (isApk || isAab) {
+					var name = (art.name || '').toLowerCase();
+					var isApk = name.indexOf('apk') !== -1;
+					var isAab = name.indexOf('aab') !== -1;
+					var isIpa = name.indexOf('ipa') !== -1;
+					if (isApk || isAab || isIpa) {
+						var label = isApk ? 'APK' : (isAab ? 'AAB' : 'IPA');
+						var type = isApk ? 'apk' : (isAab ? 'aab' : 'ipa');
 						var dl = bizgrowth360AppBuilder.download_base_url +
 							'&artifact_id=' + encodeURIComponent(art.id) +
 							'&build_id=' + encodeURIComponent(b.build_id) +
-							'&type=' + (isApk ? 'apk' : 'aab') +
+							'&type=' + type +
 							'&_wpnonce=' + encodeURIComponent(bizgrowth360AppBuilder.download_nonce);
-						actionsHtml += '<a href="' + dl + '" class="button button-small button-primary" title="Download ' + (isApk ? 'APK' : 'AAB') + '"><span class="dashicons dashicons-download"></span> ' + (isApk ? 'APK' : 'AAB') + '</a>';
+						actionsHtml += '<a href="' + dl + '" class="button button-small button-primary" title="Download ' + label + '"><span class="dashicons dashicons-download"></span> ' + label + '</a>';
 					}
 				});
 			}
@@ -692,14 +818,18 @@
 
 			actionsHtml += '</div>';
 
+			var platformLabel = b.platform === 'ios' ? 'iOS' : 'Android';
+			var platformClass = b.platform === 'ios' ? 'background:#111827;color:#F9FAFB;' : 'background:#DCFCE7;color:#166534;';
+
 			var row = $(
 				'<tr>' +
-				'  <td><code>' + b.build_id + '</code></td>' +
+				'  <td><code>' + escapeHtml(b.build_id) + '</code></td>' +
 				'  <td><strong>' + escapeHtml(b.app_name) + '</strong> <span style="color:#64748B;">v' + escapeHtml(b.version_name) + '</span></td>' +
-				'  <td><code>' + (b.build_type || 'both').toUpperCase() + '</code></td>' +
-				'  <td><span class="bg360-badge ' + statusClass + '">' + b.status + '</span></td>' +
+				'  <td><span class="bg360-badge" style="' + platformClass + '">' + platformLabel + '</span></td>' +
+				'  <td><code>' + escapeHtml((b.build_type || 'both').toUpperCase()) + '</code></td>' +
+				'  <td><span class="bg360-badge ' + statusClass + '">' + escapeHtml(b.status) + '</span></td>' +
 				'  <td>' + durationStr + '</td>' +
-				'  <td>' + b.created_at + '</td>' +
+				'  <td>' + escapeHtml(b.created_at) + '</td>' +
 				'  <td>' + actionsHtml + '</td>' +
 				'</tr>'
 			);
@@ -731,6 +861,7 @@
 				'<tr>' +
 				'  <td><strong>#' + run.run_number + '</strong></td>' +
 				'  <td>' + escapeHtml(run.name) + '</td>' +
+				'  <td><span class="bg360-badge bg360-badge-idle">Workflow</span></td>' +
 				'  <td><code>' + escapeHtml(run.event) + '</code></td>' +
 				'  <td><span class="bg360-badge ' + statusClass + '">' + (run.conclusion || run.status) + '</span></td>' +
 				'  <td>' + (run.duration_sec ? Math.floor(run.duration_sec / 60) + 'm ' + (run.duration_sec % 60) + 's' : '-') + '</td>' +
@@ -798,13 +929,14 @@
 		});
 
 		// Save Native Features
-		$('#bg360-save-features-btn').on('click', function (e) {
+		$(document).on('click', '#bg360-save-features-btn', function (e) {
 			e.preventDefault();
 			var btn = $(this);
 			var statusEl = $('#bg360-features-save-status');
+			var originalHtml = '<span class="dashicons dashicons-saved"></span> Save Native Features Settings';
 
-			btn.prop('disabled', true).addClass('updating-message');
-			statusEl.text('Saving settings...').css('color', '#64748B');
+			btn.prop('disabled', true).html('<span class="spinner is-active" style="float:none;margin:0 8px 0 0;visibility:visible;"></span> Saving Features...');
+			statusEl.html('<span style="color:#64748B;font-weight:600;"><span class="dashicons dashicons-update spin" style="vertical-align:middle;margin-right:4px;"></span> Saving to database...</span>').show();
 
 			var formArray = $('#bg360-native-features-form').serializeArray();
 			var features = {
@@ -840,18 +972,51 @@
 				nonce: bizgrowth360AppBuilder.nonce,
 				features: JSON.stringify(features)
 			}, function (res) {
-				btn.prop('disabled', false).removeClass('updating-message');
 				if (res.success) {
-					statusEl.text(res.data.message || 'Saved!').css('color', '#10B981');
+					btn.html('<span class="dashicons dashicons-yes-alt" style="margin-right:6px;vertical-align:text-top;"></span> Saved Successfully!').css({
+						'background-color': '#10B981',
+						'border-color': '#059669',
+						'color': '#ffffff'
+					});
+					statusEl.html('<span style="display:inline-flex;align-items:center;gap:6px;color:#065F46;font-weight:700;font-size:13px;background:#D1FAE5;border:1px solid #6EE7B7;padding:6px 14px;border-radius:8px;"><span class="dashicons dashicons-yes"></span> ' + (res.data.message || 'Settings saved successfully!') + '</span>').show();
+
+					showToast(res.data.message || 'Native features saved successfully!', 'success');
+					showNotice(res.data.message || 'Native features settings saved successfully.', 'success');
 					updateFeatureChips(res.data.status);
-					setTimeout(function () { statusEl.fadeOut(500, function () { $(this).text('').show(); }); }, 3000);
+
+					setTimeout(function () {
+						btn.prop('disabled', false).html(originalHtml).attr('style', '');
+						setTimeout(function () { statusEl.fadeOut(800); }, 3000);
+					}, 2500);
 				} else {
-					statusEl.text(res.data.message || 'Save error').css('color', '#EF4444');
+					btn.prop('disabled', false).html('<span class="dashicons dashicons-warning" style="margin-right:6px;vertical-align:text-top;"></span> Save Failed').css({
+						'background-color': '#EF4444',
+						'border-color': '#DC2626',
+						'color': '#ffffff'
+					});
+					statusEl.html('<span style="display:inline-flex;align-items:center;gap:6px;color:#991B1B;font-weight:700;font-size:13px;background:#FEE2E2;border:1px solid #FCA5A5;padding:6px 14px;border-radius:8px;"><span class="dashicons dashicons-warning"></span> ' + (res.data.message || 'Save error') + '</span>').show();
+					showToast('Save error: ' + (res.data.message || 'Could not save settings.'), 'error');
+					setTimeout(function () {
+						btn.html(originalHtml).attr('style', '');
+					}, 3500);
 				}
 			}).fail(function () {
-				btn.prop('disabled', false).removeClass('updating-message');
-				statusEl.text('Connection error saving features.').css('color', '#EF4444');
+				btn.prop('disabled', false).html('<span class="dashicons dashicons-warning" style="margin-right:6px;vertical-align:text-top;"></span> Connection Error').css({
+					'background-color': '#EF4444',
+					'border-color': '#DC2626',
+					'color': '#ffffff'
+				});
+				statusEl.html('<span style="display:inline-flex;align-items:center;gap:6px;color:#991B1B;font-weight:700;font-size:13px;background:#FEE2E2;border:1px solid #FCA5A5;padding:6px 14px;border-radius:8px;"><span class="dashicons dashicons-warning"></span> Connection error saving features.</span>').show();
+				showToast('Connection error communicating with server.', 'error');
+				setTimeout(function () {
+					btn.html(originalHtml).attr('style', '');
+				}, 3500);
 			});
+		});
+
+		$(document).on('submit', '#bg360-native-features-form', function (e) {
+			e.preventDefault();
+			$('#bg360-save-features-btn').trigger('click');
 		});
 
 		// Open Test Push Modal

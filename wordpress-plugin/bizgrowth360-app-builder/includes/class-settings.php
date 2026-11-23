@@ -125,9 +125,64 @@ class Settings {
 			'splash_image'         => '',
 
 			// Build targets
+			'platform'             => 'android',
 			'build_type'           => 'both',
 			'build_target'         => 'both',
+
+			// iOS / Apple
+			'ios_bundle_id'        => self::default_bundle_id( $package_id ),
+			'ios_team_id'          => '',
+			'ios_export_method'    => 'app-store',
+			'ios_mode'             => 'ipa',
+			'ios_upload_testflight' => false,
+			'macos_runner'         => 'macos-14',
 		);
+	}
+
+	/**
+	 * Derive a valid Apple bundle identifier from an Android package ID.
+	 *
+	 * Apple bundle identifiers cannot contain underscores.
+	 *
+	 * @param string $package_id
+	 * @return string
+	 */
+	public static function default_bundle_id( $package_id ) {
+		$id = str_replace( '_', '-', (string) $package_id );
+		$id = preg_replace( '/[^A-Za-z0-9.-]/', '', $id );
+		$segments = array_filter( explode( '.', $id ) );
+		$segments = array_map(
+			static function ( $segment ) {
+				return trim( $segment, '-' );
+			},
+			$segments
+		);
+		$id = implode( '.', array_filter( $segments ) );
+		return ! empty( $id ) ? $id : 'in.bizgrowth360.app';
+	}
+
+	/**
+	 * Validate and normalize an Apple bundle identifier.
+	 *
+	 * @param string $bundle_id
+	 * @return string Empty string when invalid.
+	 */
+	public static function sanitize_bundle_id( $bundle_id ) {
+		$bundle_id = trim( (string) $bundle_id );
+		if ( strlen( $bundle_id ) > 155 ) {
+			return '';
+		}
+		$segment = '[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?';
+		if ( ! preg_match( '/^' . $segment . '(\.' . $segment . ')+$/', $bundle_id ) ) {
+			return '';
+		}
+		if ( ! preg_match( '/[A-Za-z]/', $bundle_id ) ) {
+			return '';
+		}
+		if ( preg_match( '/\.(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i', $bundle_id ) ) {
+			return '';
+		}
+		return $bundle_id;
 	}
 
 	/**
@@ -156,6 +211,26 @@ class Settings {
 
 		$sanitized['build_type']           = in_array( $input['build_type'] ?? 'both', array( 'both', 'release', 'debug' ), true ) ? $input['build_type'] : 'both';
 		$sanitized['build_target']         = in_array( $input['build_target'] ?? 'both', array( 'both', 'apk', 'aab' ), true ) ? $input['build_target'] : 'both';
+		$sanitized['platform']             = in_array( $input['platform'] ?? 'android', array( 'android', 'ios', 'both' ), true ) ? $input['platform'] : 'android';
+
+		// iOS / Apple settings. Invalid values fall back to safe defaults rather
+		// than being stored and failing later on the macOS runner.
+		$bundle_input = self::sanitize_bundle_id( $input['ios_bundle_id'] ?? '' );
+		$sanitized['ios_bundle_id'] = ! empty( $bundle_input )
+			? $bundle_input
+			: self::default_bundle_id( $sanitized['package_id'] );
+
+		$team_id = strtoupper( sanitize_text_field( $input['ios_team_id'] ?? '' ) );
+		$sanitized['ios_team_id'] = preg_match( '/^[A-Z0-9]{10}$/', $team_id ) ? $team_id : '';
+
+		$sanitized['ios_export_method'] = in_array( $input['ios_export_method'] ?? 'app-store', array( 'app-store', 'ad-hoc', 'development' ), true )
+			? $input['ios_export_method']
+			: 'app-store';
+		$sanitized['ios_mode'] = in_array( $input['ios_mode'] ?? 'ipa', array( 'ipa', 'validation' ), true ) ? $input['ios_mode'] : 'ipa';
+		$sanitized['ios_upload_testflight'] = ! empty( $input['ios_upload_testflight'] );
+		$sanitized['macos_runner'] = in_array( $input['macos_runner'] ?? 'macos-14', array( 'macos-14', 'macos-15' ), true )
+			? $input['macos_runner']
+			: 'macos-14';
 
 		return $sanitized;
 	}

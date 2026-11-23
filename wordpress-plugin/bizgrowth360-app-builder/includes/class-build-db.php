@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class BuildDb {
 
 	const TABLE_NAME = 'bg360_builds';
-	const DB_VERSION = '1.0.0';
+	const DB_VERSION = '1.1.0';
 	const DB_VERSION_OPTION = 'bizgrowth360_build_db_version';
 
 	/**
@@ -42,6 +42,10 @@ class BuildDb {
 			parent_build_id varchar(64) DEFAULT NULL,
 			app_name varchar(255) NOT NULL,
 			package_id varchar(255) NOT NULL,
+			platform varchar(16) NOT NULL DEFAULT 'android',
+			ios_bundle_id varchar(255) DEFAULT NULL,
+			ios_export_method varchar(20) DEFAULT NULL,
+			ios_upload_testflight tinyint(1) NOT NULL DEFAULT 0,
 			website_url text NOT NULL,
 			version_name varchar(64) NOT NULL DEFAULT '1.0.0',
 			version_code int(11) NOT NULL DEFAULT 1,
@@ -63,6 +67,7 @@ class BuildDb {
 			UNIQUE KEY build_id (build_id),
 			KEY parent_build_id (parent_build_id),
 			KEY status (status),
+			KEY platform (platform),
 			KEY run_id (run_id),
 			KEY app_name (app_name(191)),
 			KEY package_id (package_id(191)),
@@ -89,6 +94,10 @@ class BuildDb {
 			'parent_build_id'  => null,
 			'app_name'         => '',
 			'package_id'       => '',
+			'platform'         => 'android',
+			'ios_bundle_id'    => '',
+			'ios_export_method' => '',
+			'ios_upload_testflight' => 0,
 			'website_url'      => '',
 			'version_name'     => '1.0.0',
 			'version_code'     => 1,
@@ -125,6 +134,10 @@ class BuildDb {
 				'%s', // parent_build_id
 				'%s', // app_name
 				'%s', // package_id
+				'%s', // platform
+				'%s', // ios_bundle_id
+				'%s', // ios_export_method
+				'%d', // ios_upload_testflight
 				'%s', // website_url
 				'%s', // version_name
 				'%d', // version_code
@@ -219,7 +232,7 @@ class BuildDb {
 
 		$row = $wpdb->get_row(
 			"SELECT * FROM {$table} 
-			 WHERE status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'in_progress')
+			 WHERE status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'exporting', 'uploading', 'in_progress')
 			 ORDER BY id DESC LIMIT 1"
 		);
 
@@ -240,6 +253,7 @@ class BuildDb {
 			'search'     => '',
 			'status'     => '',
 			'build_type' => '',
+			'platform'   => '',
 			'page'       => 1,
 			'per_page'   => 10,
 			'orderby'    => 'id',
@@ -253,7 +267,8 @@ class BuildDb {
 
 		if ( ! empty( $r['search'] ) ) {
 			$like = '%' . $wpdb->esc_like( $r['search'] ) . '%';
-			$where[] = '(app_name LIKE %s OR package_id LIKE %s OR build_id LIKE %s)';
+			$where[] = '(app_name LIKE %s OR package_id LIKE %s OR ios_bundle_id LIKE %s OR build_id LIKE %s)';
+			$values[] = $like;
 			$values[] = $like;
 			$values[] = $like;
 			$values[] = $like;
@@ -261,11 +276,16 @@ class BuildDb {
 
 		if ( ! empty( $r['status'] ) && 'all' !== $r['status'] ) {
 			if ( 'active' === $r['status'] ) {
-				$where[] = "status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'in_progress')";
+				$where[] = "status IN ('queued', 'dispatching', 'starting', 'preparing', 'building', 'signing', 'exporting', 'uploading', 'in_progress')";
 			} else {
 				$where[] = 'status = %s';
 				$values[] = $r['status'];
 			}
+		}
+
+		if ( ! empty( $r['platform'] ) && 'all' !== $r['platform'] ) {
+			$where[] = 'platform = %s';
+			$values[] = $r['platform'];
 		}
 
 		if ( ! empty( $r['build_type'] ) && 'all' !== $r['build_type'] ) {
@@ -323,6 +343,8 @@ class BuildDb {
 
 		$row->config_snapshot = json_decode( $row->config_snapshot, true ) ?: array();
 		$row->artifacts       = ! empty( $row->artifacts ) ? ( json_decode( $row->artifacts, true ) ?: array() ) : array();
+		$row->platform        = ! empty( $row->platform ) ? $row->platform : 'android';
+		$row->ios_upload_testflight = ! empty( $row->ios_upload_testflight );
 
 		return $row;
 	}

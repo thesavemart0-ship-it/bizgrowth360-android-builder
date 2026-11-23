@@ -149,9 +149,14 @@ class AjaxHandler {
 			'search'     => isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '',
 			'status'     => isset( $_POST['status'] ) ? sanitize_text_field( wp_unslash( $_POST['status'] ) ) : '',
 			'build_type' => isset( $_POST['build_type'] ) ? sanitize_text_field( wp_unslash( $_POST['build_type'] ) ) : '',
+			'platform'   => isset( $_POST['platform'] ) ? sanitize_key( wp_unslash( $_POST['platform'] ) ) : '',
 			'page'       => isset( $_POST['page'] ) ? absint( $_POST['page'] ) : 1,
 			'per_page'   => isset( $_POST['per_page'] ) ? absint( $_POST['per_page'] ) : 10,
 		);
+
+		if ( ! in_array( $args['platform'], array( '', 'all', 'android', 'ios' ), true ) ) {
+			$args['platform'] = '';
+		}
 
 		$db_builds = BuildDb::get_builds( $args );
 
@@ -374,9 +379,14 @@ class AjaxHandler {
 			wp_send_json_error( array( 'message' => __( 'Firebase Server Key is not configured in Native Features > Push Notifications.', 'bizgrowth360-app-builder' ) ) );
 		}
 
-		$tokens = DeviceTokensDb::get_tokens( array( 'limit' => 10 ) );
+		$tokens = DeviceTokensDb::get_tokens(
+			array(
+				'platform' => 'android',
+				'limit'    => 10,
+			)
+		);
 		if ( empty( $tokens ) ) {
-			wp_send_json_error( array( 'message' => __( 'No registered devices found. Launch your compiled app on an Android device to register an FCM device token first.', 'bizgrowth360-app-builder' ) ) );
+			wp_send_json_error( array( 'message' => __( 'No registered Android devices found. Launch your compiled Android app to register an FCM device token first. iOS APNs tokens require a separate APNs provider.', 'bizgrowth360-app-builder' ) ) );
 		}
 
 		$device_tokens = array_map( function( $t ) { return $t->token; }, $tokens );
