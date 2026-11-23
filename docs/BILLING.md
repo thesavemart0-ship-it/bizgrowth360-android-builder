@@ -375,3 +375,19 @@ signature paths were exercised with locally computed HMAC signatures.
 6. Configure a real system cron for `bizgrowth360_billing_cron`.
 7. Run a sandbox transaction and webhook test before enabling live keys.
 8. Verify invoice download and refund flow in sandbox.
+
+## 18. Live Deployment
+
+Deployed to Hostinger via FTPS on 2026-11-23:
+
+- Live plugin version: **1.3.2**.
+- `/app-builder-pricing/` → HTTP 200 with plan cards.
+- `/app-builder-billing/` → HTTP 200.
+- Billing webhook endpoint → HTTP 400 `Razorpay webhook secret is not configured` (route is active; secrets are intentionally not configured yet).
+- Live `billing.css` contains the latest pricing/dashboard styles.
+
+Live gateway keys, SMTP and a real system cron are still required before live
+payments. Deployable package:
+
+- `dist/bizgrowth360-app-builder-1.3.2.zip`
+- SHA-256: `388E9580CD043177B12026D2D1097D71651CD74C48E84C148A5C2D94BB5AD032`

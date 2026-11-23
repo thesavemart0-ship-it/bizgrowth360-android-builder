@@ -74,7 +74,8 @@ The plugin includes a workspace-based subscription engine with plans, Razorpay
 and Stripe adapters, signed webhooks, invoices, GST/tax configuration, coupons,
 upgrades/downgrades, grace periods, quota enforcement and customer/admin billing
 dashboards. See [docs/BILLING.md](docs/BILLING.md) for gateway constants, webhook
-setup, lifecycle rules and testing.
+setup, lifecycle rules and testing. Phase 9 is deployed to the live site on
+plugin version 1.3.2; gateway keys and SMTP still need production configuration.
 
 ### Local
 
