@@ -204,3 +204,4 @@ No WordPress API is implemented in Phase 3.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common errors
 - [docs/SIGNING.md](docs/SIGNING.md) — keystore generation
 - [docs/VERIFICATION.md](docs/VERIFICATION.md) — Phase 3 test results and remaining verification
+- [docs/HOSTINGER_DEPLOYMENT.md](docs/HOSTINGER_DEPLOYMENT.md) — Hostinger plugin deployment record

@@ -108,13 +108,38 @@ Also verified rejection of HTTP URLs and loopback/private/link-local asset hosts
 
 ---
 
-## 6. Not executed in this environment
+## 6. GitHub Actions end-to-end run
 
-These require GitHub or a physical/emulated device and are **not claimed as passing**:
+Workflow: **Bizgrowth360 Android Dynamic Build**  
+Run: `45109616293`  
+Commit: `8887de0`  
+Result: **SUCCESS**
 
-- Triggering the rewritten workflow on GitHub-hosted runners.
+The first run (`45109354007`) failed before the build because `android-actions/setup-android@v3` could not install the obsolete `tools` SDK package. The step was removed; the runner image already provides the Android SDK used by the previous successful builds. The rerun passed every step.
+
+Downloaded artifacts were extracted and re-validated locally with strict mode:
+
+| Artifact | File | Size | SHA-256 |
+| :--- | :--- | :--- | :--- |
+| `Demo-Website-App-1.0.0-APK` | `Demo-Website-App-1.0.0-release.apk` | 3.27 MB | `1999c8db3f549a1b1ff90acb25496092aac45fea22f920159b941b6591a5bb54` |
+| `Demo-Website-App-1.0.0-AAB` | `Demo-Website-App-1.0.0-release.aab` | 3.06 MB | `c44254ceaeb9f7110bafeeaccf52115dcfdc008f59f94e42057bd9be1401974b` |
+
+Verified after download:
+
+- APK package `in.bizgrowth360.demoapp`, version `1.0.0 (1)`, label `Demo Website App`.
+- AAB manifest package/version decoded from protobuf.
+- APK/AAB signatures present.
+- Bundled runtime config contains the configured app name, package ID and URL.
+- Artifact download endpoint returned the exact uploaded archive sizes.
+
+---
+
+## 7. Not executed in this environment
+
+These require a physical/emulated device and are **not claimed as passing**:
+
 - Installing the APK on an emulator/device and visually confirming the website, splash transition, back button and status bar.
-- Signing with a real production keystore (local builds used the debug key fallback).
+- Signing with a real production keystore (local and GitHub builds used the debug key fallback).
 - AAB-only build mode (AAB production was exercised through `both` mode).
 
-The legacy Phase 2 workflow file is preserved but was not run on GitHub in this phase.
+The legacy Phase 2 workflow file is preserved as a manual regression workflow.
